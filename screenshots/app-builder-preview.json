@@ -1,0 +1,36 @@
+{
+  "url": "http://127.0.0.1:8080/",
+  "viewports": {
+    "desktop": {
+      "width": 1280,
+      "height": 800,
+      "status": 200,
+      "title": "羽排",
+      "hasCanvas": false,
+      "bodyTextLen": 274,
+      "bodyTextHash": "455b05415c4ee2ce99000a1e6cdbee5281fe633175f30714672bb74cf032b0aa",
+      "bodyTextPrefix": "YUPAI 羽排 當日現場單打排點看板。團主用平板橫向改棋盤，球友手機只看自己的狀態。 阿明 佳玲 8:12 建立今日場次 場館",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-preview.png"
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844,
+      "status": 200,
+      "title": "羽排",
+      "hasCanvas": false,
+      "bodyTextLen": 274,
+      "bodyTextHash": "455b05415c4ee2ce99000a1e6cdbee5281fe633175f30714672bb74cf032b0aa",
+      "bodyTextPrefix": "YUPAI 羽排 當日現場單打排點看板。團主用平板橫向改棋盤，球友手機只看自己的狀態。 阿明 佳玲 8:12 建立今日場次 場館",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-preview-mobile.png"
+    }
+  },
+  "brandWarnings": [],
+  "authWarnings": [],
+  "verdictFile": "/workspace/screenshots/app-builder-preview.json"
+}

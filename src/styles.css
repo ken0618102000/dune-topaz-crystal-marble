@@ -1,0 +1,96 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@theme {
+  --color-background: #0b0f0d;
+  --color-foreground: #eef2ef;
+  --color-card: #131a16;
+  --color-card-foreground: #eef2ef;
+  --color-popover: #181f1b;
+  --color-popover-foreground: #eef2ef;
+  --color-primary: #9ec9b0;
+  --color-primary-foreground: #0b0f0d;
+  --color-secondary: #1a231e;
+  --color-secondary-foreground: #eef2ef;
+  --color-muted: #1a231e;
+  --color-muted-foreground: #8b9a90;
+  --color-accent: #24332b;
+  --color-accent-foreground: #eef2ef;
+  --color-destructive: #c97870;
+  --color-destructive-foreground: #0b0f0d;
+  --color-border: #2a3831;
+  --color-input: #2a3831;
+  --color-ring: #9ec9b0;
+  --color-court: #1e3d32;
+  --color-line: #c5d4cb;
+  --color-warn: #c4a574;
+  --color-ok: #7dba8a;
+  --radius-xs: 0.25rem;
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.5rem;
+  --radius: 0.75rem;
+  --font-sans: "Noto Sans TC", "Noto Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Syne", "Noto Sans TC", sans-serif;
+}
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  * {
+    border-color: var(--color-border);
+  }
+  html,
+  body,
+  #app {
+    background: var(--color-background);
+    color: var(--color-foreground);
+    min-height: 100%;
+  }
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+  p {
+    text-wrap: pretty;
+  }
+}
+
+@keyframes court-flash {
+  0%,
+  100% {
+    box-shadow: 0 0 0 1px color-mix(in oklab, var(--color-warn) 55%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 2px var(--color-warn);
+    background-color: color-mix(in oklab, var(--color-warn) 18%, var(--color-court));
+  }
+}
+
+.court-overtime {
+  animation: court-flash 1s var(--ease-in-out, ease-in-out) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .court-overtime {
+    animation: none;
+    box-shadow: 0 0 0 2px var(--color-warn);
+  }
+}
+
+.nameplate {
+  touch-action: none;
+  user-select: none;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
