@@ -3,6 +3,7 @@
 這份文件給要 **自己跑起來** 或 **部署上線** 的人。產品怎麼用請看 [README](../README.md)。
 
 - [系統需求](#系統需求)
+- [Windows 一鍵啟動](#windows-一鍵啟動)
 - [本機開發（推薦，零設定）](#本機開發推薦零設定)
 - [本機接真實 Postgres / Neon](#本機接真實-postgres--neon)
 - [環境變數](#環境變數)
@@ -26,9 +27,9 @@
 | 瀏覽器 | Chromium / Safari / Firefox 近期版 | 看板拖放以指標事件為主，平板最順 |
 | Postgres | 15+（上線必備） | 本機可不裝，見下一節 |
 
-作業系統：macOS、Linux、WSL2 皆可。Windows 原生終端也可以，但路徑與 `startup.sh` 是給 Linux sandbox 用的，自架請直接跑 `npm run dev`。
+作業系統：Windows 10/11 請用根目錄 **「一鍵啟動.bat」**（見下一節）。macOS、Linux、WSL2 跑 `npm run dev`。`startup.sh` 是給線上預覽用的，自己的機器不用碰。
 
-確認 Node：
+確認 Node（一鍵啟動會代勞；手動安裝時）：
 
 ```bash
 node -v    # 應為 v22.x
@@ -41,6 +42,22 @@ npm -v
 nvm install 22
 nvm use 22
 ```
+
+---
+
+## Windows 一鍵啟動
+
+給現場那台 Windows 筆電 / 桌機：不用開終端機、不用先裝資料庫。
+
+1. 到 [倉庫頁](https://github.com/ken0618102000/autumn-lark-bison-dawn) 按 **Code → Download ZIP**，解壓縮。
+2. 打開解壓後的資料夾，**雙擊 `一鍵啟動.bat`**。
+3. 第一次會代裝 Node.js（若還沒有）並下載套件，之後再開就只要等瀏覽器跳出來。
+4. 團主用跳出的視窗看板；球友手機連 **同一 Wi-Fi**，網址用視窗裡印的 `http://區網IP:8080`。
+5. 關掉黑色視窗 = 看板停止。場次存在專案裡的 `data\`，下次再開還在。
+
+若 Windows 跳出「誰發行的？」選 **仍要執行**。若手機連不上，防火牆允許 Node 使用 8080 連接埠。
+
+已經 clone 過 git 的人，在專案根目錄雙擊同一個 bat 即可，不必再下載 ZIP。
 
 ---
 

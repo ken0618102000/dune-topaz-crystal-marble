@@ -86,7 +86,17 @@
 
 ## 快速開始
 
-本機 **不必** 設定資料庫或環境變數。沒有 `DATABASE_URL` 時會用內嵌的 PGLite（WASM Postgres），重啟開發伺服器後資料會清空——剛好適合試打。
+### Windows 一鍵（現場筆電）
+
+1. 下載倉庫 ZIP：[ken0618102000/autumn-lark-bison-dawn](https://github.com/ken0618102000/autumn-lark-bison-dawn) → Code → Download ZIP，解壓縮。
+2. 雙擊 **`一鍵啟動.bat`**。沒裝 Node 會自動裝，瀏覽器會自己打開看板。
+3. 手機 / 平板連同一 Wi-Fi，用視窗裡印的區網網址進入。場次存在 `data\`，關掉再開還在。
+
+詳細（防火牆、代裝失敗）見 [docs/SETUP.md](docs/SETUP.md#windows-一鍵啟動)。
+
+### 本機開發
+
+不必設定資料庫。沒有 `DATABASE_URL` 時用內嵌 PGLite。開發模式重啟後記憶體資料會清空；Windows 一鍵啟動會把資料寫進 `data\`。
 
 ```bash
 git clone https://github.com/ken0618102000/autumn-lark-bison-dawn.git

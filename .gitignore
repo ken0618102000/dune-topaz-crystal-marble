@@ -7,3 +7,5 @@ node_modules/
 .grok/preview.log
 .grok/status
 artifacts/.tmp/
+/data/
+/yupai-data/
