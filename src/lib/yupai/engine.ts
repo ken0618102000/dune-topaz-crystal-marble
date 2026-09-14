@@ -1,5 +1,6 @@
 import { newId } from "./ids.ts";
 import { pickPairs, pairKey, pickOpponentForCore, type Candidate } from "./matching.ts";
+import { applyMatchRating, ratingSummary } from "./rating.ts";
 import type {
   BoardAction,
   BoardState,
@@ -12,6 +13,7 @@ import type {
   Session,
   DropDest,
 } from "./types.ts";
+import { clampSkill, SKILL_DEFAULT } from "./types.ts";
 
 function cloneState(state: BoardState): BoardState {
   return structuredClone(state);
@@ -504,9 +506,28 @@ function finishMatch(
   match.status = "completed";
   match.endedAt = iso(now);
   match.pausedAt = null;
-  if (winnerId) match.winnerId = winnerId;
   if (scoreA != null) match.scoreA = scoreA;
   if (scoreB != null) match.scoreB = scoreB;
+  let win = winnerId ?? null;
+  if (!win && match.scoreA != null && match.scoreB != null) {
+    if (match.scoreA > match.scoreB) win = a.id;
+    else if (match.scoreB > match.scoreA) win = b.id;
+  }
+  if (win) match.winnerId = win;
+
+  const update = applyMatchRating({
+    skillA: a.skill,
+    skillB: b.skill,
+    scoreA: match.scoreA,
+    scoreB: match.scoreB,
+    winner: win === a.id ? "a" : win === b.id ? "b" : null,
+  });
+  let ratingNote: string | undefined;
+  if (update) {
+    a.skill = update.skillA;
+    b.skill = update.skillB;
+    ratingNote = ratingSummary(a.nickname, b.nickname, update);
+  }
 
   const finishPlayer = (p: Player, oppId: string) => {
     p.playCount += 1;
@@ -522,7 +543,7 @@ function finishMatch(
   };
   finishPlayer(a, b.id);
   finishPlayer(b, a.id);
-  return promoteCourt(state, courtNo, now);
+  return { warning: promoteCourt(state, courtNo, now), ratingNote };
 }
 
 function addPlayer(
@@ -535,11 +556,12 @@ function addPlayer(
   const name = nickname.trim();
   if (!name) throw new Error("請輸入暱稱");
   if (nicknameTaken(state, name)) throw new Error("同一場次暱稱不可重複");
-  const sk = Math.min(5, Math.max(1, Math.round(skill || 3)));
+  const sk = clampSkill(skill || SKILL_DEFAULT);
   state.players.push({
     id: newId(),
     nickname: name,
     skill: sk,
+    seedSkill: sk,
     isDropIn,
     status: "not_arrived",
     locked: false,
@@ -621,10 +643,10 @@ export function applyAction(
         return { state: next };
       }
       case "setSkill": {
-        player(next, action.playerId).skill = Math.min(
-          5,
-          Math.max(1, action.skill),
-        );
+        const sk = clampSkill(action.skill);
+        const p = player(next, action.playerId);
+        p.skill = sk;
+        p.seedSkill = sk;
         return { state: next };
       }
       case "importPlayers": {
@@ -681,7 +703,7 @@ export function applyAction(
         return { state: next, message: out.message ?? "已重排下一場", warning: out.warning };
       }
       case "endMatch": {
-        const warn = finishMatch(
+        const out = finishMatch(
           next,
           action.courtNo,
           now,
@@ -689,7 +711,13 @@ export function applyAction(
           action.scoreA,
           action.scoreB,
         );
-        return { state: next, message: `第 ${action.courtNo} 場下場`, warning: warn };
+        return {
+          state: next,
+          message: out.ratingNote
+            ? `第 ${action.courtNo} 場下場 · ${out.ratingNote}`
+            : `第 ${action.courtNo} 場下場`,
+          warning: out.warning,
+        };
       }
       case "pauseMatch": {
         const m = liveMatchOnCourt(next, action.courtNo);

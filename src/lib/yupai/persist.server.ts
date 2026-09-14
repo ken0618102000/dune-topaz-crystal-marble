@@ -19,9 +19,13 @@ function asBool(v: unknown): boolean {
   return v === true || v === "t" || v === "true";
 }
 
-function asInt(v: unknown, fallback = 0): number {
+function asNum(v: unknown, fallback = 0): number {
   const n = Number(v);
   return Number.isFinite(n) ? n : fallback;
+}
+
+function asInt(v: unknown, fallback = 0): number {
+  return Math.round(asNum(v, fallback));
 }
 
 function asIso(v: unknown): string | null {
@@ -74,7 +78,8 @@ function playerFromRow(row: Record<string, unknown>): Player {
   return {
     id: asText(row.id),
     nickname: asText(row.nickname),
-    skill: asInt(row.skill, 3),
+    skill: asNum(row.skill_rating ?? row.skill, 10),
+    seedSkill: asNum(row.seed_skill ?? row.skill_rating ?? row.skill, 10),
     isDropIn: asBool(row.is_drop_in),
     status: asText(row.status) as Player["status"],
     locked: asBool(row.locked),
@@ -250,15 +255,17 @@ async function writeState(sql: Sql, state: BoardState) {
   for (const p of state.players) {
     await sql.query(
       `insert into yupai_players (
-        id, session_id, nickname, skill, is_drop_in, status, locked, court_no,
+        id, session_id, nickname, skill, skill_rating, seed_skill, is_drop_in, status, locked, court_no,
         consecutive_played, play_count, bye_count, wait_total_sec, play_total_sec,
         last_wait_start, last_opponent_id, sort_order
-      ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
+      ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,
       [
         p.id,
         s.id,
         p.nickname,
+        Math.round(p.skill),
         p.skill,
+        p.seedSkill ?? p.skill,
         p.isDropIn,
         p.status,
         p.locked,

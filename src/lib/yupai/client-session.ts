@@ -1,3 +1,5 @@
+import { migrateLegacySkill } from "./types.ts";
+
 const DEVICE_KEY = "yupai:device";
 
 export function getDeviceId(): string {
@@ -35,7 +37,12 @@ export function readFrequent(): FrequentPlayer[] {
     const raw = localStorage.getItem("yupai:frequent");
     if (!raw) return [];
     const parsed = JSON.parse(raw) as FrequentPlayer[];
-    return Array.isArray(parsed) ? parsed : [];
+    return Array.isArray(parsed)
+      ? parsed.map((p) => ({
+          nickname: p.nickname,
+          skill: migrateLegacySkill(p.skill),
+        }))
+      : [];
   } catch {
     return [];
   }

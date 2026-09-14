@@ -9,7 +9,55 @@ export const PLAYER_STATUSES = [
 
 export type PlayerStatus = (typeof PLAYER_STATUSES)[number];
 
+export const SKILL_MIN = 1;
+export const SKILL_MAX = 18;
+export const SKILL_DEFAULT = 10;
+
+/** @deprecated use skillBand(); kept so old 1–5 indexes still render something */
 export const SKILL_LABELS = ["", "初學", "入門", "中等", "進階", "高手"] as const;
+
+export const SKILL_BANDS: Array<{ max: number; label: string }> = [
+  { max: 3, label: "初學" },
+  { max: 6, label: "入門" },
+  { max: 9, label: "中下" },
+  { max: 12, label: "中等" },
+  { max: 15, label: "中上" },
+  { max: 18, label: "高手" },
+];
+
+export function clampSkill(n: number): number {
+  if (!Number.isFinite(n)) return SKILL_DEFAULT;
+  const rounded = Math.round(n * 10) / 10;
+  return Math.min(SKILL_MAX, Math.max(SKILL_MIN, rounded));
+}
+
+export function skillBand(skill: number): string {
+  const s = Math.round(clampSkill(skill));
+  for (const band of SKILL_BANDS) {
+    if (s <= band.max) return band.label;
+  }
+  return "高手";
+}
+
+export function formatSkill(skill: number): string {
+  const n = clampSkill(skill);
+  const shown = Number.isInteger(n) ? String(n) : n.toFixed(1);
+  return `${shown}級`;
+}
+
+export function formatSkillDelta(delta: number): string {
+  if (!Number.isFinite(delta) || Math.abs(delta) < 0.05) return "0";
+  const abs = Math.abs(delta).toFixed(1);
+  return delta > 0 ? `+${abs}` : `−${abs}`;
+}
+
+/** Map leftover 1–5 values (old UI) onto the 1–18 scale. */
+export function migrateLegacySkill(skill: number): number {
+  if (!Number.isFinite(skill)) return SKILL_DEFAULT;
+  if (skill > 5) return clampSkill(skill);
+  const map = [SKILL_DEFAULT, 3, 6, 10, 14, 17] as const;
+  return map[Math.round(skill)] ?? SKILL_DEFAULT;
+}
 
 export const STATUS_LABELS: Record<PlayerStatus, string> = {
   not_arrived: "未到",
@@ -57,6 +105,7 @@ export type Player = {
   id: string;
   nickname: string;
   skill: number;
+  seedSkill: number;
   isDropIn: boolean;
   status: PlayerStatus;
   locked: boolean;

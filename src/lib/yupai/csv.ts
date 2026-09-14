@@ -1,3 +1,5 @@
+import { clampSkill, SKILL_DEFAULT } from "./types.ts";
+
 export type CsvPlayerRow = {
   nickname: string;
   skill: number;
@@ -44,10 +46,8 @@ export function parsePlayerCsv(text: string): CsvPlayerRow[] {
     const cols = splitCsvLine(lines[i]!);
     const nickname = (cols[0] ?? "").trim();
     if (!nickname) continue;
-    const skillRaw = Number(cols[1] ?? 3);
-    const skill = Number.isFinite(skillRaw)
-      ? Math.min(5, Math.max(1, Math.round(skillRaw)))
-      : 3;
+    const skillRaw = Number(cols[1] ?? SKILL_DEFAULT);
+    const skill = Number.isFinite(skillRaw) ? clampSkill(skillRaw) : SKILL_DEFAULT;
     const flag = (cols[2] ?? "").trim();
     const isDropIn = flag === "1" || flag === "true" || flag === "是" || flag === "臨打";
     rows.push({ nickname, skill, isDropIn });

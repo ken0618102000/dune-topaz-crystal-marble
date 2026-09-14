@@ -5,7 +5,7 @@ import { useBoard } from "@/hooks/use-board";
 import { useNow } from "@/hooks/use-now";
 import { readSelfId, writeSelfId } from "@/lib/yupai/client-session";
 import { formatClock, remainingMatchMs, formatWait, currentWaitSec } from "@/lib/yupai/format";
-import { STATUS_LABELS } from "@/lib/yupai/types";
+import { formatSkill, formatSkillDelta, skillBand, STATUS_LABELS } from "@/lib/yupai/types";
 
 export function PlayerStatusPage({ code }: { code: string }) {
   const api = useBoard(code);
@@ -133,6 +133,14 @@ export function PlayerStatusPage({ code }: { code: string }) {
       <dl className="grid grid-cols-2 gap-3">
         <Stat label="已打" value={`${me.playCount} 場`} />
         <Stat label="輪空" value={`${me.byeCount} 次`} />
+        <Stat
+          label="程度"
+          value={`${formatSkill(me.skill)} ${skillBand(me.skill)}`}
+        />
+        <Stat
+          label="今日升降"
+          value={formatSkillDelta(me.skill - me.seedSkill)}
+        />
         <Stat
           label="場號"
           value={me.courtNo ? `第 ${me.courtNo} 場` : "—"}

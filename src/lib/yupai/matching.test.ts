@@ -38,7 +38,8 @@ function restPlayer(id: string, i: number): Player {
   return {
     id,
     nickname: id,
-    skill: 3,
+    skill: 10,
+    seedSkill: 10,
     isDropIn: false,
     status: "rest",
     locked: false,

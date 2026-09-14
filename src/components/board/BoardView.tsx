@@ -13,14 +13,6 @@ import {
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
   Sheet,
   SheetContent,
   SheetHeader,
@@ -35,6 +27,7 @@ import { CourtCard } from "./CourtCard";
 import { Nameplate } from "./Nameplate";
 import { NextSlot } from "./NextSlot";
 import { RosterSheet } from "./RosterSheet";
+import { ScoreDialog } from "./ScoreDialog";
 import { SettingsSheet } from "./SettingsSheet";
 
 type Drag = {
@@ -319,6 +312,7 @@ export function BoardView({ code }: { code: string }) {
                     now={now}
                     nameOf={nameOf}
                     canEdit={api.canEdit}
+                    scoringEnabled={session.scoringEnabled}
                     onEnd={() => requestEnd(no)}
                     onPause={() => api.run({ type: "pauseMatch", courtNo: no })}
                     onResume={() => api.run({ type: "resumeMatch", courtNo: no })}
@@ -528,59 +522,5 @@ export function BoardView({ code }: { code: string }) {
         }}
       />
     </div>
-  );
-}
-
-function ScoreDialog({
-  open,
-  courtNo,
-  players,
-  onClose,
-  onSubmit,
-}: {
-  open: boolean;
-  courtNo: number | null;
-  players: Player[];
-  onClose: () => void;
-  onSubmit: (p: { winnerId?: string | null; scoreA?: number | null; scoreB?: number | null }) => void;
-}) {
-  const [winner, setWinner] = useState<string | null>(null);
-  const a = players[0];
-  const b = players[1];
-  return (
-    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>第 {courtNo} 場結果</DialogTitle>
-          <DialogDescription>可只記勝負，也可略過。</DialogDescription>
-        </DialogHeader>
-        <div className="flex gap-2">
-          {a ? (
-            <Button
-              variant={winner === a.id ? "default" : "secondary"}
-              className="flex-1"
-              onClick={() => setWinner(a.id)}
-            >
-              {a.nickname} 勝
-            </Button>
-          ) : null}
-          {b ? (
-            <Button
-              variant={winner === b.id ? "default" : "secondary"}
-              className="flex-1"
-              onClick={() => setWinner(b.id)}
-            >
-              {b.nickname} 勝
-            </Button>
-          ) : null}
-        </div>
-        <DialogFooter>
-          <Button variant="ghost" onClick={() => onSubmit({})}>
-            略過
-          </Button>
-          <Button onClick={() => onSubmit({ winnerId: winner })}>下場</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
   );
 }

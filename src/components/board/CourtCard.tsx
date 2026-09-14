@@ -12,6 +12,7 @@ type Props = {
   now: number;
   nameOf: (id: string) => string;
   canEdit: boolean;
+  scoringEnabled?: boolean;
   onEnd: () => void;
   onPause: () => void;
   onResume: () => void;
@@ -26,6 +27,7 @@ export function CourtCard({
   now,
   nameOf,
   canEdit,
+  scoringEnabled,
   onEnd,
   onPause,
   onResume,
@@ -115,7 +117,7 @@ export function CourtCard({
             onClick={onEnd}
           >
             <Square className="size-3.5" />
-            下場
+            {scoringEnabled ? "記分下場" : "下場"}
           </Button>
           {match && !paused ? (
             <Button size="icon" variant="secondary" onClick={onPause} aria-label="暫停">

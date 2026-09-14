@@ -1,7 +1,7 @@
 import { Lock, UserRound } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { currentWaitSec, formatWait } from "@/lib/yupai/format";
-import { SKILL_LABELS, STATUS_LABELS, type Player } from "@/lib/yupai/types";
+import { formatSkill, skillBand, STATUS_LABELS, type Player } from "@/lib/yupai/types";
 
 type Props = {
   player: Player;
@@ -28,6 +28,7 @@ export function Nameplate({
   }
   meta.push(`${player.playCount} 場`);
   if (lastOpponentName) meta.push(`上 ${lastOpponentName}`);
+  const moved = Math.abs(player.skill - player.seedSkill) >= 0.15;
 
   return (
     <button
@@ -60,26 +61,29 @@ export function Nameplate({
         ) : null}
       </span>
       <span className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
-        <SkillDots skill={player.skill} />
-        <span>{SKILL_LABELS[player.skill]}</span>
+        <SkillMark skill={player.skill} hot={moved} />
         {meta.length ? <span>· {meta.join(" · ")}</span> : null}
       </span>
     </button>
   );
 }
 
-export function SkillDots({ skill }: { skill: number }) {
+export function SkillMark({ skill, hot }: { skill: number; hot?: boolean }) {
+  const pct = Math.max(4, Math.min(100, (skill / 18) * 100));
   return (
-    <span className="inline-flex items-center gap-0.5" aria-hidden>
-      {Array.from({ length: 5 }, (_, i) => (
+    <span className="inline-flex items-center gap-1.5">
+      <span
+        className="relative h-1.5 w-10 overflow-hidden rounded-full bg-border"
+        aria-hidden
+      >
         <span
-          key={i}
-          className={cn(
-            "size-1 rounded-full",
-            i < skill ? "bg-primary" : "bg-border",
-          )}
+          className={cn("absolute inset-y-0 left-0 rounded-full bg-primary", hot && "bg-ok")}
+          style={{ width: `${pct}%` }}
         />
-      ))}
+      </span>
+      <span className={cn("tabular", hot && "text-ok")}>
+        {formatSkill(skill)} {skillBand(skill)}
+      </span>
     </span>
   );
 }

@@ -12,8 +12,15 @@ import {
 } from "@/components/ui/sheet";
 import { parsePlayerCsv } from "@/lib/yupai/csv";
 import { readFrequent } from "@/lib/yupai/client-session";
-import { SKILL_LABELS, STATUS_LABELS, type Player } from "@/lib/yupai/types";
+import {
+  formatSkill,
+  skillBand,
+  SKILL_DEFAULT,
+  STATUS_LABELS,
+  type Player,
+} from "@/lib/yupai/types";
 import type { BoardApi } from "@/hooks/use-board";
+import { SkillPicker } from "./SkillPicker";
 
 type Props = {
   open: boolean;
@@ -24,9 +31,10 @@ type Props = {
 
 export function RosterSheet({ open, onOpenChange, api, players }: Props) {
   const [name, setName] = useState("");
-  const [skill, setSkill] = useState(3);
+  const [skill, setSkill] = useState(SKILL_DEFAULT);
   const [dropIn, setDropIn] = useState(false);
   const [csv, setCsv] = useState("");
+  const [editSkillId, setEditSkillId] = useState<string | null>(null);
   const frequent = readFrequent();
   const canEdit = api.canEdit;
 
@@ -35,7 +43,9 @@ export function RosterSheet({ open, onOpenChange, api, players }: Props) {
       <SheetContent className="overflow-y-auto p-0">
         <SheetHeader>
           <SheetTitle>當日名單</SheetTitle>
-          <SheetDescription>暱稱不可重複。臨打不會寫入常用名單。</SheetDescription>
+          <SheetDescription>
+            暱稱不可重複。程度 1–18 級細分，臨打不會寫入常用名單。
+          </SheetDescription>
         </SheetHeader>
         <div className="flex flex-col gap-6 p-6">
           {canEdit ? (
@@ -61,16 +71,11 @@ export function RosterSheet({ open, onOpenChange, api, players }: Props) {
                 placeholder="暱稱"
                 maxLength={16}
               />
-              <div className="flex items-center justify-between gap-3">
-                <Label>程度 {SKILL_LABELS[skill]}</Label>
-                <input
-                  type="range"
-                  min={1}
-                  max={5}
-                  value={skill}
-                  onChange={(e) => setSkill(Number(e.target.value))}
-                  className="w-36 accent-primary"
-                />
+              <div className="flex flex-col gap-2">
+                <Label>
+                  程度 {formatSkill(skill)} {skillBand(skill)}
+                </Label>
+                <SkillPicker value={skill} onChange={setSkill} />
               </div>
               <label className="flex items-center justify-between gap-3 text-sm">
                 臨打
@@ -97,7 +102,7 @@ export function RosterSheet({ open, onOpenChange, api, players }: Props) {
                             })
                           }
                         >
-                          {f.nickname}
+                          {f.nickname} {formatSkill(f.skill)}
                         </button>
                       ))}
                   </div>
@@ -116,37 +121,59 @@ export function RosterSheet({ open, onOpenChange, api, players }: Props) {
               </Button>
             ) : null}
             {players.map((p) => (
-              <div
-                key={p.id}
-                className="flex items-center justify-between gap-2 rounded-lg bg-secondary px-3 py-2"
-              >
-                <div>
-                  <p className="font-medium">{p.nickname}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {STATUS_LABELS[p.status]} · {SKILL_LABELS[p.skill]} · {p.playCount} 場
-                    {p.isDropIn ? " · 臨打" : ""}
-                  </p>
-                </div>
-                {canEdit ? (
-                  <div className="flex gap-1">
-                    {p.status === "not_arrived" ? (
+              <div key={p.id} className="rounded-lg bg-secondary px-3 py-2">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <p className="font-medium">{p.nickname}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {STATUS_LABELS[p.status]} · {formatSkill(p.skill)} {skillBand(p.skill)}
+                      {Math.abs(p.skill - p.seedSkill) >= 0.15
+                        ? `（開場 ${formatSkill(p.seedSkill)}）`
+                        : ""}{" "}
+                      · {p.playCount} 場
+                      {p.isDropIn ? " · 臨打" : ""}
+                    </p>
+                  </div>
+                  {canEdit ? (
+                    <div className="flex gap-1">
+                      {p.status === "not_arrived" ? (
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() =>
+                            api.run({ type: "setStatus", playerId: p.id, status: "rest" })
+                          }
+                        >
+                          簽到
+                        </Button>
+                      ) : null}
                       <Button
                         size="sm"
-                        variant="secondary"
+                        variant={editSkillId === p.id ? "default" : "ghost"}
                         onClick={() =>
-                          api.run({ type: "setStatus", playerId: p.id, status: "rest" })
+                          setEditSkillId((id) => (id === p.id ? null : p.id))
                         }
                       >
-                        簽到
+                        程度
                       </Button>
-                    ) : null}
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => api.run({ type: "removePlayer", playerId: p.id })}
-                    >
-                      刪
-                    </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => api.run({ type: "removePlayer", playerId: p.id })}
+                      >
+                        刪
+                      </Button>
+                    </div>
+                  ) : null}
+                </div>
+                {canEdit && editSkillId === p.id ? (
+                  <div className="mt-3">
+                    <SkillPicker
+                      value={p.skill}
+                      onChange={(n) =>
+                        api.run({ type: "setSkill", playerId: p.id, skill: n })
+                      }
+                    />
                   </div>
                 ) : null}
               </div>
@@ -165,7 +192,7 @@ export function RosterSheet({ open, onOpenChange, api, players }: Props) {
                 onChange={(e) => setCsv(e.target.value)}
                 rows={5}
                 className="w-full rounded-md border border-input bg-secondary p-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                placeholder={"暱稱,程度,臨打\n阿明,3,0\n小美,4,1"}
+                placeholder={"暱稱,程度1-18,臨打\n阿明,10,0\n小美,14,1"}
               />
               <Button
                 variant="secondary"

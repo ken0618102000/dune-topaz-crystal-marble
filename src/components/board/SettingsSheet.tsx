@@ -14,6 +14,7 @@ import { WEIGHT_PRESETS } from "@/lib/yupai/matching";
 import { MATCH_DURATIONS, type Session, type Weights, type WeightPreset } from "@/lib/yupai/types";
 import type { BoardApi } from "@/hooks/use-board";
 import { readHostToken } from "@/lib/yupai/client-session";
+import { CountPicker, TimeSelect } from "@/components/ui/count-picker";
 
 type Props = {
   open: boolean;
@@ -72,20 +73,19 @@ export function SettingsSheet({ open, onOpenChange, api, session }: Props) {
               </Field>
               <div className="grid grid-cols-2 gap-3">
                 <Field label="開始">
-                  <Input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
+                  <TimeSelect value={startTime} onChange={setStartTime} />
                 </Field>
                 <Field label="結束">
-                  <Input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
+                  <TimeSelect value={endTime} onChange={setEndTime} />
                 </Field>
               </div>
-              <Field label={`面數 ${courtCount}`}>
-                <input
-                  type="range"
+              <Field label={`面數 ${courtCount}（一面兩人）`}>
+                <CountPicker
+                  value={courtCount}
                   min={1}
                   max={6}
-                  value={courtCount}
-                  onChange={(e) => setCourtCount(Number(e.target.value))}
-                  className="w-full accent-primary"
+                  ariaLabel="面數"
+                  onChange={setCourtCount}
                 />
               </Field>
               <div>
@@ -105,13 +105,13 @@ export function SettingsSheet({ open, onOpenChange, api, session }: Props) {
                 </div>
               </div>
               <Field label={`連續打滿 ${consecutive} 場必須休息`}>
-                <input
-                  type="range"
+                <CountPicker
+                  value={consecutive}
                   min={1}
                   max={4}
-                  value={consecutive}
-                  onChange={(e) => setConsecutive(Number(e.target.value))}
-                  className="w-full accent-primary"
+                  suffix=" 場"
+                  ariaLabel="連續幾場必須休息"
+                  onChange={setConsecutive}
                 />
               </Field>
               <Toggle
@@ -125,7 +125,7 @@ export function SettingsSheet({ open, onOpenChange, api, session }: Props) {
                 onCheckedChange={setBanRecent}
               />
               <Toggle
-                label="記下勝負 / 比分"
+                label="下場填比分，並依比分調整程度"
                 checked={scoring}
                 onCheckedChange={setScoring}
               />

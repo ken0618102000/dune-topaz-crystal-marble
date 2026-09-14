@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
+import { CountPicker, TimeSelect } from "@/components/ui/count-picker";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -40,7 +41,7 @@ export function LandingPage() {
             羽排
           </h1>
           <p className="mt-4 max-w-md text-lg text-muted-foreground">
-            當日現場單打排點看板。團主用平板橫向改棋盤，球友手機只看自己的狀態。
+            當日現場單打排點看板。團主用平板橫向改棋盤，球友手機只看自己的狀態。程度 1–18 級；下場記比分後實力會跟著動。
           </p>
         </div>
         <CourtHero />
@@ -48,23 +49,25 @@ export function LandingPage() {
 
       <section className="grid gap-6 lg:grid-cols-2">
         <form
+          noValidate
           className="flex flex-col gap-4 rounded-xl bg-card p-5"
           onSubmit={async (e) => {
             e.preventDefault();
+            if (busy) return;
             setBusy(true);
             try {
               const res = await createSessionFn({
                 data: {
                   venueName,
-                  sessionDate,
-                  startTime,
-                  endTime,
+                  sessionDate: sessionDate || todayISO(),
+                  startTime: startTime || "19:00",
+                  endTime: endTime || "22:00",
                   courtCount,
                   matchDurationMin: duration,
                   consecutiveLimit: consecutive,
                   forceRestAfterMatch: forceRest,
                   banRecentOpponent: false,
-                  scoringEnabled: false,
+                  scoringEnabled: true,
                   weights,
                   weightPreset: preset,
                   deviceId: getDeviceId(),
@@ -86,25 +89,30 @@ export function LandingPage() {
           <Field label="場館">
             <Input value={venueName} onChange={(e) => setVenueName(e.target.value)} />
           </Field>
+          <Field label={`面數 ${courtCount}（一面兩人）`}>
+            <CountPicker
+              value={courtCount}
+              min={1}
+              max={6}
+              ariaLabel="面數"
+              onChange={setCourtCount}
+            />
+          </Field>
+          <Field label="日期">
+            <Input
+              type="text"
+              inputMode="numeric"
+              placeholder="YYYY-MM-DD"
+              value={sessionDate}
+              onChange={(e) => setSessionDate(e.target.value)}
+            />
+          </Field>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="日期">
-              <Input type="date" value={sessionDate} onChange={(e) => setSessionDate(e.target.value)} />
-            </Field>
-            <Field label={`面數 ${courtCount}`}>
-              <input
-                type="range"
-                min={1}
-                max={6}
-                value={courtCount}
-                onChange={(e) => setCourtCount(Number(e.target.value))}
-                className="mt-3 w-full accent-primary"
-              />
-            </Field>
             <Field label="開始">
-              <Input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
+              <TimeSelect value={startTime} onChange={setStartTime} />
             </Field>
             <Field label="結束">
-              <Input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
+              <TimeSelect value={endTime} onChange={setEndTime} />
             </Field>
           </div>
           <div>
@@ -124,13 +132,13 @@ export function LandingPage() {
             </div>
           </div>
           <Field label={`連續 ${consecutive} 場必須休息`}>
-            <input
-              type="range"
+            <CountPicker
+              value={consecutive}
               min={1}
               max={4}
-              value={consecutive}
-              onChange={(e) => setConsecutive(Number(e.target.value))}
-              className="w-full accent-primary"
+              suffix=" 場"
+              ariaLabel="連續幾場必須休息"
+              onChange={setConsecutive}
             />
           </Field>
           <label className="flex items-center justify-between text-sm">
@@ -162,12 +170,13 @@ export function LandingPage() {
             </Button>
           </div>
           <Button type="submit" size="lg" disabled={busy}>
-            開場
+            {busy ? "開場中…" : "開場"}
           </Button>
         </form>
 
         <div className="flex flex-col gap-4">
           <form
+            noValidate
             className="flex flex-col gap-3 rounded-xl bg-card p-5"
             onSubmit={(e) => {
               e.preventDefault();
@@ -195,7 +204,7 @@ export function LandingPage() {
           <div className="rounded-xl bg-card p-5">
             <h2 className="text-lg font-semibold">先看示範</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              4 面場、13 人單打，含場上計時、下一場與休息區。可直接拖名牌、排下一場。
+              4 面場、13 人單打。可直接拖名牌、排下一場；下場時填比分，程度會依分差微調。
             </p>
             <Button
               className="mt-4"
@@ -218,7 +227,8 @@ export function LandingPage() {
           </div>
 
           <ul className="space-y-2 text-sm text-muted-foreground">
-            <li>單打固定賽制，一面場兩人。</li>
+            <li>程度用 1–18 級。下場填比分後會依分差微調實力，下一場配對跟著變。</li>
+            <li>單打固定賽制，一面場兩人。開場時可選 1–6 面。</li>
             <li>自動配對只填空場與下一場，不動正在打的人。</li>
             <li>不做訂場、報名、繳費或會員系統。</li>
           </ul>
