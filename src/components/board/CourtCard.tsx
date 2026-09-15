@@ -13,6 +13,7 @@ type Props = {
   nameOf: (id: string) => string;
   canEdit: boolean;
   scoringEnabled?: boolean;
+  idleLabel?: string;
   onEnd: () => void;
   onPause: () => void;
   onResume: () => void;
@@ -28,6 +29,7 @@ export function CourtCard({
   nameOf,
   canEdit,
   scoringEnabled,
+  idleLabel,
   onEnd,
   onPause,
   onResume,
@@ -75,7 +77,7 @@ export function CourtCard({
           </p>
         ) : (
           <p className="text-xs text-muted-foreground">
-            {players.length === 1 ? "人數不足" : "空場"}
+            {players.length === 1 ? "還差 1 人" : (idleLabel ?? "空場")}
           </p>
         )}
       </header>

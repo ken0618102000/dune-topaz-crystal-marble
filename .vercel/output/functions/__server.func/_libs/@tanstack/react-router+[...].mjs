@@ -5071,6 +5071,27 @@ function MatchesInner() {
 		})
 	});
 }
+function useMatches(opts) {
+	const router = useRouter();
+	{
+		const matches = router.stores.matches.get();
+		return opts?.select ? opts.select(matches) : matches;
+	}
+}
+/**
+* Read the presented route matches below the current match, or select a
+* derived value from them.
+*/
+function useChildMatches(opts) {
+	const contextRouteId = import_react.useContext(matchContext);
+	return useMatches({
+		select: (matches) => {
+			matches = matches.slice(matches.findIndex((d) => d.routeId === contextRouteId) + 1);
+			return opts?.select ? opts.select(matches) : matches;
+		},
+		structuralSharing: opts?.structuralSharing
+	});
+}
 //#endregion
 //#region node_modules/@tanstack/react-router/dist/esm/routerStores.js
 var getStoreFactory = (opts) => {
@@ -14548,4 +14569,4 @@ var renderRouterToStream = async ({ request, router, responseHeaders, children }
 	throw new Error("No renderToReadableStream or renderToPipeableStream found in react-dom/server. Ensure you are using a version of react-dom that supports streaming.");
 };
 //#endregion
-export { invariant as A, createInlineCssStyleAsset as C, resolveManifestCssLink as D, resolveManifestAssetLink as E, parseRedirect as F, decodePath as I, rootRouteId as L, dehydrateSsrMatchId as M, isRedirect as N, _getRenderedMatches as O, isResolvedRedirect as P, isNotFound as R, createInlineCssPlaceholderAsset as S, getStylesheetHref as T, Link as _, isSsrResponse as a, GLOBAL_TSR as b, stripSsrResponseBody as c, RouterProvider as d, createRouter as f, createRootRoute as g, createFileRoute as h, disposeSsrResponseDetached as i, createSieveCache as j, executeRewriteInput as k, Scripts as l, lazyRouteComponent as m, bindSsrResponseToRequest as n, normalizeSsrResponse as o, Outlet as p, defineHandlerCallback as r, replaceSsrResponse as s, renderRouterToStream as t, HeadContent as u, useNavigate as v, getScriptPreloadAttrs as w, TSR_SCRIPT_BARRIER_ID as x, useRouter as y };
+export { executeRewriteInput as A, createInlineCssPlaceholderAsset as C, resolveManifestAssetLink as D, getStylesheetHref as E, isResolvedRedirect as F, parseRedirect as I, decodePath as L, createSieveCache as M, dehydrateSsrMatchId as N, resolveManifestCssLink as O, isRedirect as P, rootRouteId as R, TSR_SCRIPT_BARRIER_ID as S, getScriptPreloadAttrs as T, createRootRoute as _, isSsrResponse as a, useRouter as b, stripSsrResponseBody as c, RouterProvider as d, createRouter as f, createFileRoute as g, lazyRouteComponent as h, disposeSsrResponseDetached as i, invariant as j, _getRenderedMatches as k, Scripts as l, Outlet as m, bindSsrResponseToRequest as n, normalizeSsrResponse as o, useChildMatches as p, defineHandlerCallback as r, replaceSsrResponse as s, renderRouterToStream as t, HeadContent as u, Link as v, createInlineCssStyleAsset as w, GLOBAL_TSR as x, useNavigate as y, isNotFound as z };

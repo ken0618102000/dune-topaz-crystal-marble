@@ -157,6 +157,16 @@ var Lock = createLucideIcon("lock", [["rect", {
 * This source code is licensed under the ISC license.
 * See the LICENSE file in the root directory of this source tree.
 */
+var Minus = createLucideIcon("minus", [["path", {
+	d: "M5 12h14",
+	key: "1ays0h"
+}]]);
+/**
+* @license lucide-react v0.510.0 - ISC
+*
+* This source code is licensed under the ISC license.
+* See the LICENSE file in the root directory of this source tree.
+*/
 var Pause = createLucideIcon("pause", [["rect", {
 	x: "14",
 	y: "4",
@@ -386,4 +396,4 @@ var X = createLucideIcon("x", [["path", {
 	key: "d8bk6v"
 }]]);
 //#endregion
-export { Square as a, Shuffle as c, Plus as d, Play as f, ChartColumn as g, ClipboardCopy as h, TriangleAlert as i, Settings as l, Lock as m, Users as n, Sparkles as o, Pause as p, UserRound as r, Smartphone as s, X as t, RotateCcw as u };
+export { ChartColumn as _, Square as a, Shuffle as c, Plus as d, Play as f, ClipboardCopy as g, Lock as h, TriangleAlert as i, Settings as l, Minus as m, Users as n, Sparkles as o, Pause as p, UserRound as r, Smartphone as s, X as t, RotateCcw as u };

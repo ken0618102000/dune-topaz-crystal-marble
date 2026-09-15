@@ -916,7 +916,7 @@ var string$1 = (params) => {
 	return new RegExp(`^${regex}$`);
 };
 var integer = /^-?\d+$/;
-var number$1 = /^-?\d+(?:\.\d+)?$/;
+var number$2 = /^-?\d+(?:\.\d+)?$/;
 var boolean$1 = /^(?:true|false)$/i;
 var lowercase = /^[^A-Z]*$/;
 var uppercase = /^[^a-z]*$/;
@@ -1742,7 +1742,7 @@ var $ZodJWT = /*@__PURE__*/ $constructor("$ZodJWT", (inst, def) => {
 });
 var $ZodNumber = /*@__PURE__*/ $constructor("$ZodNumber", (inst, def) => {
 	$ZodType.init(inst, def);
-	inst._zod.pattern = inst._zod.bag.pattern ?? number$1;
+	inst._zod.pattern = inst._zod.bag.pattern ?? number$2;
 	inst._zod.parse = (payload, _ctx) => {
 		if (def.coerce) try {
 			payload.value = Number(payload.value);
@@ -3161,6 +3161,15 @@ function _isoDuration(Class, params) {
 function _number(Class, params) {
 	return new Class({
 		type: "number",
+		checks: [],
+		...normalizeParams(params)
+	});
+}
+// @__NO_SIDE_EFFECTS__
+function _coercedNumber(Class, params) {
+	return new Class({
+		type: "number",
+		coerce: true,
 		checks: [],
 		...normalizeParams(params)
 	});
@@ -4649,7 +4658,7 @@ var ZodNumber = /*@__PURE__*/ $constructor("ZodNumber", (inst, def) => {
 		return this;
 	}
 });
-function number(params) {
+function number$1(params) {
 	return /* @__PURE__ */ _number(ZodNumber, params);
 }
 var ZodNumberFormat = /*@__PURE__*/ $constructor("ZodNumberFormat", (inst, def) => {
@@ -5028,4 +5037,9 @@ function superRefine(fn, params) {
 	return /* @__PURE__ */ _superRefine(fn, params);
 }
 //#endregion
-export { number as a, union as c, literal as i, boolean as n, object as o, custom as r, string as s, _enum as t };
+//#region node_modules/zod/v4/classic/coerce.js
+function number(params) {
+	return /* @__PURE__ */ _coercedNumber(ZodNumber, params);
+}
+//#endregion
+export { literal as a, string as c, custom as i, union as l, _enum as n, number$1 as o, boolean as r, object as s, number as t };

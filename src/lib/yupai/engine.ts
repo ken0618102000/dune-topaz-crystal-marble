@@ -236,7 +236,8 @@ function emptyQueueSlots(state: BoardState): number[] {
   return out;
 }
 
-function fillOneSeatCourts(state: BoardState, now: number): string | undefined {
+function fillOneSeatCourts(state: BoardState, now: number): { count: number; warning?: string } {
+  let count = 0;
   const warnings: string[] = [];
   for (let n = 1; n <= state.session.courtCount; n++) {
     const on = occupants(state, n, "on_court");
@@ -259,30 +260,68 @@ function fillOneSeatCourts(state: BoardState, now: number): string | undefined {
       banRecent: state.session.banRecentOpponent,
     });
     if (!oppId) {
-      warnings.push(`第 ${n} 場人數不足`);
+      warnings.push(`第 ${n} 場還差 1 人`);
       continue;
     }
     startMatch(state, n, core.id, oppId, "auto", now);
+    count += 1;
   }
-  return warnings[0];
+  return { count, warning: warnings[0] };
 }
 
-function fillNext(state: BoardState, now: number): { warning?: string; message?: string } {
-  const seatWarn = fillOneSeatCourts(state, now);
-  const courts = emptyCourts(state);
-  const queues = emptyQueueSlots(state);
-  const slots = [
-    ...courts.map((no) => ({ kind: "court" as const, no })),
-    ...queues.map((no) => ({ kind: "queue" as const, no })),
-  ];
-  if (slots.length === 0) {
-    convertForceRest(state, now);
-    return { message: "沒有空場或空的下一場槽" };
+function promoteQueuedToEmptyCourts(state: BoardState, now: number): number {
+  let n = 0;
+  for (let no = 1; no <= state.session.courtCount; no++) {
+    if (occupants(state, no, "on_court").length !== 0) continue;
+    const queued = occupants(state, no, "queued");
+    if (queued.length !== 2) continue;
+    startMatch(state, no, queued[0]!.id, queued[1]!.id, "auto", now);
+    n += 1;
   }
-  const result = pickPairs(pairingInput(state, slots.length, now));
-  if (result.failReason) {
-    convertForceRest(state, now);
-    return { warning: result.failReason };
+  for (let no = 1; no <= state.session.courtCount; no++) {
+    if (occupants(state, no, "on_court").length !== 0) continue;
+    let donor: Player[] | undefined;
+    for (let src = 1; src <= state.session.courtCount; src++) {
+      if (src === no) continue;
+      const q = occupants(state, src, "queued");
+      if (q.length !== 2) continue;
+      if (occupants(state, src, "on_court").length === 2) {
+        donor = q;
+        break;
+      }
+      donor ??= q;
+    }
+    if (!donor) continue;
+    startMatch(state, no, donor[0]!.id, donor[1]!.id, "auto", now);
+    n += 1;
+  }
+  return n;
+}
+
+function restrictionWarn(raw: string | null): string | undefined {
+  if (!raw) return undefined;
+  if (raw === "人數不足" || raw === "可排的人不足以填滿所有空場") return undefined;
+  return raw;
+}
+
+function pairRestInto(
+  state: BoardState,
+  now: number,
+  includeQueues: boolean,
+  includeCourts: boolean,
+): { count: number; warning?: string; fail?: string } {
+  const courts = includeCourts ? emptyCourts(state) : [];
+  const queues = includeQueues ? emptyQueueSlots(state) : [];
+  const slots = [
+    ...queues.map((no) => ({ kind: "queue" as const, no })),
+    ...courts.map((no) => ({ kind: "court" as const, no })),
+  ];
+  const maxPairs = Math.floor(candidates(state, now).length / 2);
+  if (slots.length === 0 || maxPairs === 0) return { count: 0 };
+  const want = Math.min(slots.length, maxPairs);
+  const result = pickPairs(pairingInput(state, want, now));
+  if (result.failReason || result.pairs.length === 0) {
+    return { count: 0, fail: result.failReason ?? "排不出組合" };
   }
   for (let i = 0; i < result.pairs.length; i++) {
     const pair = result.pairs[i]!;
@@ -295,11 +334,85 @@ function fillNext(state: BoardState, now: number): { warning?: string; message?:
   }
   markUsedPreferred(state, result.usedPreferredIds);
   applyBye(state, result.byeId);
+  return { count: result.pairs.length, warning: restrictionWarn(result.warning) };
+}
+
+function hasHungryCourt(state: BoardState): boolean {
+  for (let n = 1; n <= state.session.courtCount; n++) {
+    const on = occupants(state, n, "on_court").length;
+    if (on === 0 || on === 1) return true;
+  }
+  return false;
+}
+
+function explainFillFail(state: BoardState, fallback: string): string {
+  const restReady = state.players.filter((p) => p.status === "rest" && !p.locked);
+  const notArrived = state.players.filter((p) => p.status === "not_arrived");
+  const force = state.players.filter((p) => p.status === "force_rest");
+  const locked = state.players.filter((p) => p.locked && p.status === "rest");
+  const queued = state.players.filter((p) => p.status === "queued");
+  const onCourt = state.players.filter((p) => p.status === "on_court");
+  if (state.players.length === 0) {
+    return "還沒有球員。請先打開名單加入，加入後會進休息區。";
+  }
+  if (restReady.length < 2 && notArrived.length > 0) {
+    return `休息區可排 ${restReady.length} 人。還有 ${notArrived.length} 人未簽到，請在名單按「全部簽到」。`;
+  }
+  if (restReady.length < 2 && force.length > 0) {
+    return "剛下場的人還在強制休息。再按一次「排下一場」就會輪到他們。";
+  }
+  if (restReady.length < 2 && locked.length > 0) {
+    return `休息區可排 ${restReady.length} 人（有人鎖定不排）。至少要 2 人才排得了單打。`;
+  }
+  if (restReady.length < 2 && queued.length >= 2 && hasHungryCourt(state)) {
+    return "休息區不夠人。空場會從「下一場」補上，再按一次「排下一場」就會上場。";
+  }
+  if (restReady.length < 2 && onCourt.length >= 2) {
+    return `休息區沒人可排下一場。人還在場上打，下場後再排。`;
+  }
+  if (restReady.length < 2) {
+    return `休息區可排 ${restReady.length} 人，單打至少要 2 人。`;
+  }
+  return fallback;
+}
+
+function fillMessage(up: number, queued: number): string | undefined {
+  const bits: string[] = [];
+  if (up > 0) bits.push(`上場 ${up} 組`);
+  if (queued > 0) bits.push(`下一場排出 ${queued} 組`);
+  return bits.length ? bits.join("，") : undefined;
+}
+
+function fillNext(state: BoardState, now: number): { warning?: string; message?: string } {
+  // 空場只吃已經在「下一場」的人；休息區先排進下一場，不直接上場。
+  const promoted = promoteQueuedToEmptyCourts(state, now);
+  const seat = fillOneSeatCourts(state, now);
+
+  if (promoted + seat.count === 0 && emptyQueueSlots(state).length === 0) {
+    convertForceRest(state, now);
+    return { message: "下一場都排滿了", warning: seat.warning };
+  }
+
+  let queued = pairRestInto(state, now, true, false);
+
+  if (queued.count === 0 && Math.floor(candidates(state, now).length / 2) === 0) {
+    const forceN = state.players.filter((p) => p.status === "force_rest").length;
+    if (forceN > 0) {
+      convertForceRest(state, now);
+      queued = pairRestInto(state, now, true, false);
+    }
+  }
+
+  const up = promoted + seat.count;
+  if (up + queued.count === 0) {
+    const why = explainFillFail(state, queued.fail ?? "休息區可排的人不足，單打至少要 2 人。");
+    convertForceRest(state, now);
+    return { warning: why };
+  }
   convertForceRest(state, now);
-  const warning = result.warning ?? seatWarn;
   return {
-    message: `排出 ${result.pairs.length} 組`,
-    warning,
+    message: fillMessage(up, queued.count),
+    warning: queued.warning ?? seat.warning,
   };
 }
 
@@ -458,13 +571,13 @@ function applyMove(
   if (ids.length === 0) throw new Error("沒有要移動的人");
   if (dest.zone === "rest") {
     moveToRest(state, ids, now);
-    return;
-  }
-  if (dest.zone === "court") {
+  } else if (dest.zone === "court") {
     moveToCourt(state, ids, dest.courtNo, dest.replacePlayerId, now);
+  } else {
+    moveToQueue(state, ids, dest.courtNo, dest.replacePlayerId, now);
     return;
   }
-  moveToQueue(state, ids, dest.courtNo, dest.replacePlayerId, now);
+  promoteQueuedToEmptyCourts(state, now);
 }
 
 function promoteCourt(state: BoardState, courtNo: number, now: number): string | undefined {
@@ -476,13 +589,7 @@ function promoteCourt(state: BoardState, courtNo: number, now: number): string |
   if (queued.length === 1) {
     return `第 ${courtNo} 場下一組只有 1 人，無法開打`;
   }
-  const result = pickPairs(pairingInput(state, 1, now));
-  if (result.failReason) return result.failReason;
-  const pair = result.pairs[0];
-  if (!pair) return "人數不足";
-  startMatch(state, courtNo, pair.a, pair.b, "auto", now);
-  markUsedPreferred(state, result.usedPreferredIds);
-  applyBye(state, result.byeId);
+  return;
 }
 
 function finishMatch(
@@ -563,7 +670,7 @@ function addPlayer(
     skill: sk,
     seedSkill: sk,
     isDropIn,
-    status: "not_arrived",
+    status: "rest",
     locked: false,
     courtNo: null,
     consecutivePlayed: 0,
@@ -575,7 +682,7 @@ function addPlayer(
     lastOpponentId: null,
     sortOrder: state.players.length,
   });
-  void now;
+  startWait(state.players[state.players.length - 1]!, now);
 }
 
 function setStatus(state: BoardState, playerId: string, status: PlayerStatus, now: number) {

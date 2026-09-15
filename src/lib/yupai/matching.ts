@@ -159,7 +159,7 @@ export function pickPairs(input: PairingInput): PairingResult {
   } else if (pairs.length < slotCount) {
     warning =
       input.candidates.length < slotCount * 2
-        ? "人數不足"
+        ? "可排的人不足以填滿所有空場"
         : "部分組合被硬限制擋下";
   }
 

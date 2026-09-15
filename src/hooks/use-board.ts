@@ -41,8 +41,10 @@ export function useBoard(code: string) {
       if (isPayload(res)) {
         qc.setQueryData(queryKey, res);
         if (res.conflict && res.warning) toast.warning(res.warning);
-        else if (res.warning) toast.warning(res.warning);
-        else if (res.message) toast.success(res.message);
+        else {
+          if (res.message) toast.success(res.message);
+          if (res.warning && res.warning !== res.message) toast.warning(res.warning);
+        }
         return res;
       }
       if (res && typeof res === "object" && "error" in res) {

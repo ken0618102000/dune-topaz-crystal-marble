@@ -176,6 +176,10 @@ export function BoardView({ code }: { code: string }) {
 
   const session = board.session;
   const courts = Array.from({ length: session.courtCount }, (_, i) => i + 1);
+  const restReady = board.players.filter(
+    (p) => p.status === "rest" && !p.locked,
+  ).length;
+  const onCourtCount = board.players.filter((p) => p.status === "on_court").length;
   const rest = board.players
     .filter((p) => p.status === "rest" || p.status === "force_rest")
     .sort(
@@ -300,6 +304,17 @@ export function BoardView({ code }: { code: string }) {
               const on = board.players.filter(
                 (p) => p.status === "on_court" && p.courtNo === no,
               );
+              const queuedHere = board.players.filter(
+                (p) => p.status === "queued" && p.courtNo === no,
+              );
+              const idleLabel =
+                queuedHere.length === 2
+                  ? "待上場"
+                  : queuedHere.length === 1
+                    ? "還差 1 人"
+                    : restReady < 2 && onCourtCount >= 2
+                      ? "等人"
+                      : "空場";
               const match = board.matches.find(
                 (m) => m.status === "live" && m.courtNo === no,
               );
@@ -313,6 +328,7 @@ export function BoardView({ code }: { code: string }) {
                     nameOf={nameOf}
                     canEdit={api.canEdit}
                     scoringEnabled={session.scoringEnabled}
+                    idleLabel={idleLabel}
                     onEnd={() => requestEnd(no)}
                     onPause={() => api.run({ type: "pauseMatch", courtNo: no })}
                     onResume={() => api.run({ type: "resumeMatch", courtNo: no })}
@@ -376,7 +392,9 @@ export function BoardView({ code }: { code: string }) {
               />
             ))}
             {rest.length === 0 ? (
-              <p className="text-sm text-muted-foreground">休息區是空的。</p>
+              <p className="text-sm text-muted-foreground">
+                休息區是空的。名單加入的人會出現在這裡；未到的人請先簽到。
+              </p>
             ) : null}
           </div>
           {sideline.length ? (

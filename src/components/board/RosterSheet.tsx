@@ -44,7 +44,7 @@ export function RosterSheet({ open, onOpenChange, api, players }: Props) {
         <SheetHeader>
           <SheetTitle>當日名單</SheetTitle>
           <SheetDescription>
-            暱稱不可重複。程度 1–18 級細分，臨打不會寫入常用名單。
+            加入後會進休息區，可直接按「排下一場」。暱稱不可重複；臨打不會寫入常用名單。
           </SheetDescription>
         </SheetHeader>
         <div className="flex flex-col gap-6 p-6">
