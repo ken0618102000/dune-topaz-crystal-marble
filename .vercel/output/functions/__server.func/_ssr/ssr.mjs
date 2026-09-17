@@ -89,7 +89,7 @@ var HEADERS = { TSS_SHELL: "X-TSS_SHELL" };
 * the dev styles URL for route-scoped CSS collection.
 */
 async function getStartManifest(matchedRoutes) {
-	const { tsrStartManifest } = await import("../_tanstack-start-manifest_v-BAwWMJNF.mjs");
+	const { tsrStartManifest } = await import("../_tanstack-start-manifest_v-VDKzH_Z8.mjs");
 	const startManifest = tsrStartManifest();
 	let routes = startManifest.routes;
 	routes[rootRouteId];
@@ -111,35 +111,35 @@ async function getStartManifest(matchedRoutes) {
 var manifest = {
 	"09f0974582d68efe754958a5add5098dce7b672c284bfb758f23ca22256774cb": {
 		functionName: "startTransferFn_createServerFn_handler",
-		importer: () => import("./api-DK1QFeZE.mjs")
+		importer: () => import("./api-DCMlf7VH.mjs")
 	},
 	"23de6dc9dbe5ae26eb149d50fadd3c8f910644651d5a2a7748b679a80ff9ef29": {
 		functionName: "createSessionFn_createServerFn_handler",
-		importer: () => import("./api-DK1QFeZE.mjs")
+		importer: () => import("./api-DCMlf7VH.mjs")
 	},
 	"58ac3c014a878d59f5504a253b72fd22ab3c98652cfe86b743e9a3cc323267f5": {
 		functionName: "acceptTransferFn_createServerFn_handler",
-		importer: () => import("./api-DK1QFeZE.mjs")
+		importer: () => import("./api-DCMlf7VH.mjs")
 	},
 	"81db569df4a75f8d985bc36c4a9c77b3b5a6bd5cfbbd8688bbd070c1066b45f0": {
 		functionName: "mutateBoardFn_createServerFn_handler",
-		importer: () => import("./api-DK1QFeZE.mjs")
+		importer: () => import("./api-DCMlf7VH.mjs")
 	},
 	"85888758518c103ee1a8f35ffcc4c80cd134d2fa684cead066e9d54bb5e8446a": {
 		functionName: "claimControlFn_createServerFn_handler",
-		importer: () => import("./api-DK1QFeZE.mjs")
+		importer: () => import("./api-DCMlf7VH.mjs")
 	},
 	"91e6ddef0546fe155f5c7330683ba2110d9491b938425aa69a0c5078b25c552f": {
 		functionName: "getBoardFn_createServerFn_handler",
-		importer: () => import("./api-DK1QFeZE.mjs")
+		importer: () => import("./api-DCMlf7VH.mjs")
 	},
 	"9cd5ae0e70f7cdc72dc61bfc7071ec010989d3ecf77c653bb9a6bd0bd5f70d46": {
 		functionName: "createDemoFn_createServerFn_handler",
-		importer: () => import("./api-DK1QFeZE.mjs")
+		importer: () => import("./api-DCMlf7VH.mjs")
 	},
 	"eafeeecd2101921984645c5825dee744e7b862292e05e3616045ef8cb1f4185b": {
 		functionName: "undoBoardFn_createServerFn_handler",
-		importer: () => import("./api-DK1QFeZE.mjs")
+		importer: () => import("./api-DCMlf7VH.mjs")
 	}
 };
 async function getServerFnById(id, access) {
@@ -1409,7 +1409,7 @@ var getBaseManifest = getProdBaseManifest;
 var createEarlyHintsForRequest = createEarlyHintsCollector;
 async function loadEntries() {
 	const [routerEntry, startEntry, pluginAdapters] = await Promise.all([
-		import("./router-D-9kjrdp.mjs").then((n) => n.t),
+		import("./router-C2mdRcJ5.mjs").then((n) => n.t),
 		import("./start-5Z2QO8AU.mjs"),
 		import("./empty-plugin-adapters-D9UWiqvJ.mjs")
 	]);

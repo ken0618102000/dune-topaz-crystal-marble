@@ -7,8 +7,8 @@
       "status": 200,
       "title": "羽排",
       "hasCanvas": false,
-      "bodyTextLen": 801,
-      "bodyTextHash": "83eae5e23bbc076576cc299dde49fc0cd64a07333b97ce69f89bed0a7669d5f9",
+      "bodyTextLen": 808,
+      "bodyTextHash": "116355e33b3e7a7462a590ac9856a3edf33269eba051600a2290f32eb736f617",
       "bodyTextPrefix": "YUPAI 羽排 當日現場單打排點看板。團主用平板橫向改棋盤，球友手機只看自己的狀態。程度 1–18 級；下場記比分後實力會跟著",
       "horizontalOverflow": false,
       "consoleErrors": [],
@@ -21,8 +21,8 @@
       "status": 200,
       "title": "羽排",
       "hasCanvas": false,
-      "bodyTextLen": 801,
-      "bodyTextHash": "83eae5e23bbc076576cc299dde49fc0cd64a07333b97ce69f89bed0a7669d5f9",
+      "bodyTextLen": 808,
+      "bodyTextHash": "116355e33b3e7a7462a590ac9856a3edf33269eba051600a2290f32eb736f617",
       "bodyTextPrefix": "YUPAI 羽排 當日現場單打排點看板。團主用平板橫向改棋盤，球友手機只看自己的狀態。程度 1–18 級；下場記比分後實力會跟著",
       "horizontalOverflow": false,
       "consoleErrors": [],
@@ -32,5 +32,7 @@
   },
   "brandWarnings": [],
   "authWarnings": [],
-  "verdictFile": "/workspace/screenshots/app-builder-built.json"
+  "verdictFile": "/workspace/screenshots/app-builder-built.json",
+  "divergesFromBaseline": false,
+  "baselineReasons": []
 }

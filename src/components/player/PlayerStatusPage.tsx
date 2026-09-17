@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { useBoard } from "@/hooks/use-board";
 import { useNow } from "@/hooks/use-now";
 import { readSelfId, writeSelfId } from "@/lib/yupai/client-session";
-import { formatClock, remainingMatchMs, formatWait, currentWaitSec } from "@/lib/yupai/format";
+import { formatClock, elapsedMatchMs, formatWait, currentWaitSec } from "@/lib/yupai/format";
 import { formatSkill, formatSkillDelta, skillBand, STATUS_LABELS } from "@/lib/yupai/types";
 
 export function PlayerStatusPage({ code }: { code: string }) {
@@ -84,15 +84,8 @@ export function PlayerStatusPage({ code }: { code: string }) {
     me.status === "on_court"
       ? board.matches.find((m) => m.status === "live" && m.courtNo === me.courtNo)
       : undefined;
-  const remain = live
-    ? remainingMatchMs(
-        live.startedAt,
-        live.durationMin,
-        live.extendedSec,
-        live.pauseAccumulatedMs,
-        live.pausedAt,
-        now,
-      )
+  const elapsed = live
+    ? elapsedMatchMs(live.startedAt, live.pauseAccumulatedMs, live.pausedAt, now)
     : null;
   const wait = currentWaitSec(me.lastWaitStart, me.waitTotalSec, now);
 
@@ -116,12 +109,12 @@ export function PlayerStatusPage({ code }: { code: string }) {
 
       <section className="rounded-xl bg-court p-6 text-center">
         <p className="text-sm text-line">{STATUS_LABELS[me.status]}</p>
-        {remain != null ? (
+        {elapsed != null ? (
           <p className="mt-2 font-display text-6xl tabular leading-none">
-            {formatClock(remain / 1000)}
+            {formatClock(elapsed / 1000)}
           </p>
         ) : me.status === "queued" ? (
-          <p className="mt-2 text-lg">等候第 {me.courtNo} 場</p>
+          <p className="mt-2 text-lg">上場順位 {me.courtNo}</p>
         ) : (
           <p className="mt-2 text-lg text-muted-foreground">已等 {formatWait(wait)}</p>
         )}
@@ -143,7 +136,13 @@ export function PlayerStatusPage({ code }: { code: string }) {
         />
         <Stat
           label="場號"
-          value={me.courtNo ? `第 ${me.courtNo} 場` : "—"}
+          value={
+            me.status === "queued" && me.courtNo
+              ? `順位 ${me.courtNo}`
+              : me.courtNo
+                ? `第 ${me.courtNo} 場`
+                : "—"
+          }
         />
         <Stat
           label="鎖定"

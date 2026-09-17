@@ -7,7 +7,6 @@ type Props = {
   now: number;
   nameOf: (id: string) => string;
   onPointerPlayer: (player: Player, e: React.PointerEvent<HTMLButtonElement>) => void;
-  onPointerPair?: (e: React.PointerEvent<HTMLDivElement>) => void;
 };
 
 export function NextSlot({
@@ -16,19 +15,16 @@ export function NextSlot({
   now,
   nameOf,
   onPointerPlayer,
-  onPointerPair,
 }: Props) {
   const a = players[0];
   const b = players[1];
   return (
     <div
       data-drop={`queue:${courtNo}`}
-      data-pair-ids={players.map((p) => p.id).join(",")}
-      onPointerDown={players.length === 2 ? onPointerPair : undefined}
       className="flex min-w-56 flex-col gap-2 rounded-xl border border-border bg-card p-3"
     >
       <p className="text-xs font-medium tracking-wide text-muted-foreground">
-        下一場 · {courtNo}
+        順位 {courtNo}
       </p>
       <div className="flex flex-col gap-2" data-drop={a ? `seat:queue:${courtNo}:${a.id}` : `queue:${courtNo}`}>
         {a ? (
@@ -36,10 +32,7 @@ export function NextSlot({
             player={a}
             now={now}
             lastOpponentName={a.lastOpponentId ? nameOf(a.lastOpponentId) : null}
-            onPointerDown={(e) => {
-              e.stopPropagation();
-              onPointerPlayer(a, e);
-            }}
+            onPointerDown={(e) => onPointerPlayer(a, e)}
           />
         ) : (
           <EmptySeat label="等待" />
@@ -52,10 +45,7 @@ export function NextSlot({
             player={b}
             now={now}
             lastOpponentName={b.lastOpponentId ? nameOf(b.lastOpponentId) : null}
-            onPointerDown={(e) => {
-              e.stopPropagation();
-              onPointerPlayer(b, e);
-            }}
+            onPointerDown={(e) => onPointerPlayer(b, e)}
           />
         ) : (
           <EmptySeat label="等待" />

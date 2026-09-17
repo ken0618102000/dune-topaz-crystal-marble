@@ -220,20 +220,31 @@ function applyBye(state: BoardState, byeId: string | null) {
   if (p) p.byeCount += 1;
 }
 
-function emptyCourts(state: BoardState): number[] {
+function emptyCourts(state: BoardState, onlyCourtNo?: number): number[] {
   const out: number[] = [];
-  for (let n = 1; n <= state.session.courtCount; n++) {
+  const from = onlyCourtNo ?? 1;
+  const to = onlyCourtNo ?? state.session.courtCount;
+  for (let n = from; n <= to; n++) {
     if (occupants(state, n, "on_court").length === 0) out.push(n);
   }
   return out;
 }
 
-function emptyQueueSlots(state: BoardState): number[] {
+function emptyQueueSlots(state: BoardState, onlyCourtNo?: number): number[] {
   const out: number[] = [];
-  for (let n = 1; n <= state.session.courtCount; n++) {
+  const from = onlyCourtNo ?? 1;
+  const to = onlyCourtNo ?? state.session.courtCount;
+  for (let n = from; n <= to; n++) {
     if (occupants(state, n, "queued").length === 0) out.push(n);
   }
   return out;
+}
+
+function queueHasVacancy(state: BoardState): boolean {
+  for (let n = 1; n <= state.session.courtCount; n++) {
+    if (occupants(state, n, "queued").length < 2) return true;
+  }
+  return false;
 }
 
 function fillOneSeatCourts(state: BoardState, now: number): { count: number; warning?: string } {
@@ -258,6 +269,7 @@ function fillOneSeatCourts(state: BoardState, now: number): { count: number; war
       blacklist: blacklistSet(state),
       weights: state.session.weights,
       banRecent: state.session.banRecentOpponent,
+      preferred: preferredOpen(state),
     });
     if (!oppId) {
       warnings.push(`第 ${n} 場還差 1 人`);
@@ -269,30 +281,41 @@ function fillOneSeatCourts(state: BoardState, now: number): { count: number; war
   return { count, warning: warnings[0] };
 }
 
+function firstCompleteQueueSlot(state: BoardState): number | null {
+  for (let n = 1; n <= state.session.courtCount; n++) {
+    if (occupants(state, n, "queued").length === 2) return n;
+  }
+  return null;
+}
+
+function compactQueue(state: BoardState) {
+  const occupied: number[] = [];
+  for (let n = 1; n <= state.session.courtCount; n++) {
+    if (occupants(state, n, "queued").length > 0) occupied.push(n);
+  }
+  let dest = 1;
+  for (const src of occupied) {
+    if (src !== dest) {
+      for (const p of occupants(state, src, "queued")) p.courtNo = dest;
+    }
+    dest += 1;
+  }
+}
+
+function takeQueuePairOntoCourt(state: BoardState, courtNo: number, now: number): boolean {
+  const slot = firstCompleteQueueSlot(state);
+  if (slot == null) return false;
+  const queued = occupants(state, slot, "queued");
+  startMatch(state, courtNo, queued[0]!.id, queued[1]!.id, "auto", now);
+  compactQueue(state);
+  return true;
+}
+
 function promoteQueuedToEmptyCourts(state: BoardState, now: number): number {
   let n = 0;
   for (let no = 1; no <= state.session.courtCount; no++) {
     if (occupants(state, no, "on_court").length !== 0) continue;
-    const queued = occupants(state, no, "queued");
-    if (queued.length !== 2) continue;
-    startMatch(state, no, queued[0]!.id, queued[1]!.id, "auto", now);
-    n += 1;
-  }
-  for (let no = 1; no <= state.session.courtCount; no++) {
-    if (occupants(state, no, "on_court").length !== 0) continue;
-    let donor: Player[] | undefined;
-    for (let src = 1; src <= state.session.courtCount; src++) {
-      if (src === no) continue;
-      const q = occupants(state, src, "queued");
-      if (q.length !== 2) continue;
-      if (occupants(state, src, "on_court").length === 2) {
-        donor = q;
-        break;
-      }
-      donor ??= q;
-    }
-    if (!donor) continue;
-    startMatch(state, no, donor[0]!.id, donor[1]!.id, "auto", now);
+    if (!takeQueuePairOntoCourt(state, no, now)) break;
     n += 1;
   }
   return n;
@@ -309,9 +332,10 @@ function pairRestInto(
   now: number,
   includeQueues: boolean,
   includeCourts: boolean,
+  onlyCourtNo?: number,
 ): { count: number; warning?: string; fail?: string } {
-  const courts = includeCourts ? emptyCourts(state) : [];
-  const queues = includeQueues ? emptyQueueSlots(state) : [];
+  const courts = includeCourts ? emptyCourts(state, onlyCourtNo) : [];
+  const queues = includeQueues ? emptyQueueSlots(state, onlyCourtNo) : [];
   const slots = [
     ...queues.map((no) => ({ kind: "queue" as const, no })),
     ...courts.map((no) => ({ kind: "court" as const, no })),
@@ -365,7 +389,7 @@ function explainFillFail(state: BoardState, fallback: string): string {
     return `休息區可排 ${restReady.length} 人（有人鎖定不排）。至少要 2 人才排得了單打。`;
   }
   if (restReady.length < 2 && queued.length >= 2 && hasHungryCourt(state)) {
-    return "休息區不夠人。空場會從「下一場」補上，再按一次「排下一場」就會上場。";
+    return "空場會依上場順位補人。再按一次「排下一場」就會從順位 1 開始上場。";
   }
   if (restReady.length < 2 && onCourt.length >= 2) {
     return `休息區沒人可排下一場。人還在場上打，下場後再排。`;
@@ -376,19 +400,96 @@ function explainFillFail(state: BoardState, fallback: string): string {
   return fallback;
 }
 
-function fillMessage(up: number, queued: number): string | undefined {
+function fillMessage(up: number, queuedPairs: number, queuedPeople = 0): string | undefined {
   const bits: string[] = [];
   if (up > 0) bits.push(`上場 ${up} 組`);
-  if (queued > 0) bits.push(`下一場排出 ${queued} 組`);
+  if (queuedPairs > 0) bits.push(`下一場排出 ${queuedPairs} 組`);
+  if (queuedPeople > 0) bits.push(`下一場排出 ${queuedPeople} 人`);
   return bits.length ? bits.join("，") : undefined;
 }
 
+function opponentPool(state: BoardState, core: Player, extra: Candidate[], now: number) {
+  return {
+    candidates: [
+      {
+        id: core.id,
+        waitMs: waitMs(core, now),
+        playCount: core.playCount,
+        skill: core.skill,
+      },
+      ...extra,
+    ],
+    meetings: meetingsMap(state),
+    lastOpponents: lastOpponentsMap(state),
+    blacklist: blacklistSet(state),
+    preferred: preferredOpen(state),
+    weights: state.session.weights,
+    banRecent: state.session.banRecentOpponent,
+  };
+}
+
+function completePartialQueue(state: BoardState, courtNo: number, now: number): boolean {
+  const queued = occupants(state, courtNo, "queued");
+  if (queued.length !== 1) return false;
+  const core = queued[0]!;
+  const oppId = pickOpponentForCore(
+    core.id,
+    opponentPool(state, core, candidates(state, now), now),
+  );
+  if (!oppId) return false;
+  assignQueue(state, courtNo, core.id, oppId);
+  return true;
+}
+
+function completeAllPartialQueues(state: BoardState, now: number): number {
+  let n = 0;
+  for (let no = 1; no <= state.session.courtCount; no++) {
+    if (completePartialQueue(state, no, now)) n += 1;
+  }
+  return n;
+}
+
+function liveOnCourt(state: BoardState, courtNo: number) {
+  return occupants(state, courtNo, "on_court").length;
+}
+
+function refillAfterMatch(
+  state: BoardState,
+  courtNo: number,
+  now: number,
+): { up: number; queued: number; people: number; warning?: string } {
+  let people = completeAllPartialQueues(state, now);
+  const promoWarn = promoteCourt(state, courtNo, now);
+  let up = liveOnCourt(state, courtNo) === 2 ? 1 : 0;
+  let fail: string | undefined;
+
+  if (liveOnCourt(state, courtNo) === 0) {
+    const staged = pairRestInto(state, now, true, false);
+    people += completeAllPartialQueues(state, now);
+    promoteCourt(state, courtNo, now);
+    if (liveOnCourt(state, courtNo) === 2) up = 1;
+    else fail = staged.fail;
+  }
+
+  const next = pairRestInto(state, now, true, false);
+
+  let warning: string | undefined;
+  if (promoWarn) warning = promoWarn;
+  else if (up === 0 && fail && fail !== "人數不足") warning = fail;
+  else if (up === 0 && candidates(state, now).length >= 2) {
+    warning = explainFillFail(state, fail ?? "休息區沒人可補上場");
+  }
+  convertForceRest(state, now);
+  return { up, queued: next.count, people, warning };
+}
+
 function fillNext(state: BoardState, now: number): { warning?: string; message?: string } {
-  // 空場只吃已經在「下一場」的人；休息區先排進下一場，不直接上場。
+  // 休息區只進上場順位。已在順位裡的成組才補空場，且從順位 1 開始。
+  const people = completeAllPartialQueues(state, now);
   const promoted = promoteQueuedToEmptyCourts(state, now);
   const seat = fillOneSeatCourts(state, now);
 
-  if (promoted + seat.count === 0 && emptyQueueSlots(state).length === 0) {
+  if (promoted + seat.count + people === 0 && !queueHasVacancy(state)) {
     convertForceRest(state, now);
     return { message: "下一場都排滿了", warning: seat.warning };
   }
@@ -404,14 +505,14 @@ function fillNext(state: BoardState, now: number): { warning?: string; message?:
   }
 
   const up = promoted + seat.count;
-  if (up + queued.count === 0) {
+  if (up + queued.count + people === 0) {
     const why = explainFillFail(state, queued.fail ?? "休息區可排的人不足，單打至少要 2 人。");
     convertForceRest(state, now);
     return { warning: why };
   }
   convertForceRest(state, now);
   return {
-    message: fillMessage(up, queued.count),
+    message: fillMessage(up, queued.count, people),
     warning: queued.warning ?? seat.warning,
   };
 }
@@ -423,13 +524,7 @@ function releaseFromCourt(state: BoardState, p: Player, now: number) {
 }
 
 function releaseFromQueue(state: BoardState, p: Player, now: number) {
-  const courtNo = p.courtNo;
-  const partner =
-    courtNo != null
-      ? occupants(state, courtNo, "queued").find((x) => x.id !== p.id)
-      : undefined;
   sendToRest(p, now);
-  if (partner) sendToRest(partner, now);
 }
 
 function detach(state: BoardState, ids: string[], now: number) {
@@ -581,13 +676,12 @@ function applyMove(
 }
 
 function promoteCourt(state: BoardState, courtNo: number, now: number): string | undefined {
-  const queued = occupants(state, courtNo, "queued");
-  if (queued.length === 2) {
-    startMatch(state, courtNo, queued[0]!.id, queued[1]!.id, "auto", now);
-    return;
-  }
-  if (queued.length === 1) {
-    return `第 ${courtNo} 場下一組只有 1 人，無法開打`;
+  if (occupants(state, courtNo, "on_court").length !== 0) return;
+  if (takeQueuePairOntoCourt(state, courtNo, now)) return;
+  for (let n = 1; n <= state.session.courtCount; n++) {
+    if (occupants(state, n, "queued").length === 1) {
+      return "上場順位還差 1 人，無法開打";
+    }
   }
   return;
 }
@@ -650,7 +744,8 @@ function finishMatch(
   };
   finishPlayer(a, b.id);
   finishPlayer(b, a.id);
-  return { warning: promoteCourt(state, courtNo, now), ratingNote };
+  const refill = refillAfterMatch(state, courtNo, now);
+  return { ...refill, ratingNote };
 }
 
 function addPlayer(
@@ -818,11 +913,13 @@ export function applyAction(
           action.scoreA,
           action.scoreB,
         );
+        const fill = fillMessage(out.up, out.queued, out.people);
+        const head = out.ratingNote
+          ? `第 ${action.courtNo} 場下場 · ${out.ratingNote}`
+          : `第 ${action.courtNo} 場下場`;
         return {
           state: next,
-          message: out.ratingNote
-            ? `第 ${action.courtNo} 場下場 · ${out.ratingNote}`
-            : `第 ${action.courtNo} 場下場`,
+          message: fill ? `${head} · ${fill}` : head,
           warning: out.warning,
         };
       }

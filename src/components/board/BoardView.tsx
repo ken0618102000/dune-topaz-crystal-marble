@@ -304,17 +304,10 @@ export function BoardView({ code }: { code: string }) {
               const on = board.players.filter(
                 (p) => p.status === "on_court" && p.courtNo === no,
               );
-              const queuedHere = board.players.filter(
-                (p) => p.status === "queued" && p.courtNo === no,
-              );
               const idleLabel =
-                queuedHere.length === 2
-                  ? "待上場"
-                  : queuedHere.length === 1
-                    ? "還差 1 人"
-                    : restReady < 2 && onCourtCount >= 2
-                      ? "等人"
-                      : "空場";
+                restReady < 2 && onCourtCount >= 2
+                  ? "等人"
+                  : "空場";
               const match = board.matches.find(
                 (m) => m.status === "live" && m.courtNo === no,
               );
@@ -332,9 +325,6 @@ export function BoardView({ code }: { code: string }) {
                     onEnd={() => requestEnd(no)}
                     onPause={() => api.run({ type: "pauseMatch", courtNo: no })}
                     onResume={() => api.run({ type: "resumeMatch", courtNo: no })}
-                    onExtend={() =>
-                      api.run({ type: "extendMatch", courtNo: no, extraSec: 120 })
-                    }
                     onPointerPlayer={(p, e) => beginPointer([p.id], p.nickname, e)}
                   />
                 </div>
@@ -345,7 +335,7 @@ export function BoardView({ code }: { code: string }) {
 
         <section>
           <h2 className="mb-2 text-xs font-medium tracking-wide text-muted-foreground">
-            下一場
+            上場順位
           </h2>
           <div className="flex snap-x gap-3 overflow-x-auto pb-2 lg:grid lg:grid-cols-4 lg:overflow-visible">
             {courts.map((no) => {
@@ -360,13 +350,6 @@ export function BoardView({ code }: { code: string }) {
                     now={now}
                     nameOf={nameOf}
                     onPointerPlayer={(p, e) => beginPointer([p.id], p.nickname, e)}
-                    onPointerPair={(e) =>
-                      beginPointer(
-                        queued.map((p) => p.id),
-                        queued.map((p) => p.nickname).join(" vs "),
-                        e,
-                      )
-                    }
                   />
                 </div>
               );

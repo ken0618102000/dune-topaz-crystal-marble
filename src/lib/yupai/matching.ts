@@ -122,17 +122,21 @@ export function pickPairs(input: PairingInput): PairingResult {
 
   const pickOpp = (core: Candidate, hard: boolean): Candidate | null => {
     const others = pool.filter((p) => p.id !== core.id);
-    let best: Candidate | null = null;
-    let bestS = -Infinity;
-    for (const opp of others) {
-      const s = scoreOpp(core, opp, others, hard);
-      if (s == null) continue;
-      if (s > bestS || (s === bestS && best && opp.id < best.id)) {
-        bestS = s;
-        best = opp;
+    const scan = (neverMetOnly: boolean): Candidate | null => {
+      let best: Candidate | null = null;
+      let bestS = -Infinity;
+      for (const opp of others) {
+        if (neverMetOnly && (meetings.get(pairKey(core.id, opp.id)) ?? 0) > 0) continue;
+        const s = scoreOpp(core, opp, others, hard);
+        if (s == null) continue;
+        if (s > bestS || (s === bestS && best && opp.id < best.id)) {
+          bestS = s;
+          best = opp;
+        }
       }
-    }
-    return best;
+      return best;
+    };
+    return scan(true) ?? scan(false);
   };
 
   while (pairs.length < slotCount && pool.length >= 2) {
@@ -169,14 +173,14 @@ export function pickPairs(input: PairingInput): PairingResult {
 /** Pick a single opponent for a fixed core (e.g. 場上已有 1 人). */
 export function pickOpponentForCore(
   coreId: string,
-  input: Omit<PairingInput, "slotCount" | "preferred">,
+  input: Omit<PairingInput, "slotCount">,
 ): string | null {
   const core = input.candidates.find((c) => c.id === coreId);
   if (!core) return null;
   const rest = input.candidates.filter((c) => c.id !== coreId);
   const result = pickPairs({
     ...input,
-    preferred: [],
+    preferred: input.preferred ?? [],
     slotCount: 1,
     candidates: [
       { ...core, waitMs: core.waitMs + 1e12 },

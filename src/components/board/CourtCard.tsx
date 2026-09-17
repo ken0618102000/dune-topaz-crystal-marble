@@ -1,6 +1,6 @@
-import { Pause, Play, Plus, Square } from "lucide-react";
+import { Pause, Play, Square } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { formatClock, remainingMatchMs } from "@/lib/yupai/format";
+import { elapsedMatchMs, formatClock, matchBudgetMs } from "@/lib/yupai/format";
 import type { Match, Player } from "@/lib/yupai/types";
 import { Button } from "@/components/ui/button";
 import { EmptySeat, Nameplate } from "./Nameplate";
@@ -17,7 +17,6 @@ type Props = {
   onEnd: () => void;
   onPause: () => void;
   onResume: () => void;
-  onExtend: () => void;
   onPointerPlayer: (player: Player, e: React.PointerEvent<HTMLButtonElement>) => void;
 };
 
@@ -33,20 +32,16 @@ export function CourtCard({
   onEnd,
   onPause,
   onResume,
-  onExtend,
   onPointerPlayer,
 }: Props) {
-  const remaining = match
-    ? remainingMatchMs(
-        match.startedAt,
-        match.durationMin,
-        match.extendedSec,
-        match.pauseAccumulatedMs,
-        match.pausedAt,
-        now,
-      )
+  const elapsed = match
+    ? elapsedMatchMs(match.startedAt, match.pauseAccumulatedMs, match.pausedAt, now)
     : null;
-  const overtime = remaining != null && remaining <= 0 && players.length === 2;
+  const overtime =
+    match != null &&
+    elapsed != null &&
+    elapsed >= matchBudgetMs(match.durationMin, match.extendedSec) &&
+    players.length === 2;
   const paused = Boolean(match?.pausedAt);
   const a = players[0];
   const b = players[1];
@@ -63,14 +58,14 @@ export function CourtCard({
         <h3 className="text-sm font-medium tracking-wide text-line">
           第 {courtNo} 場
         </h3>
-        {remaining != null && players.length === 2 ? (
+        {elapsed != null && players.length === 2 ? (
           <p
             className={cn(
               "font-display tabular text-2xl leading-none tracking-tight",
               overtime ? "text-warn" : "text-foreground",
             )}
           >
-            {formatClock(remaining / 1000)}
+            {formatClock(elapsed / 1000)}
             {paused ? (
               <span className="ml-2 text-xs font-sans text-muted-foreground">暫停</span>
             ) : null}
@@ -136,15 +131,6 @@ export function CourtCard({
               <Play className="size-4" />
             </Button>
           )}
-          <Button
-            size="icon"
-            variant="secondary"
-            onClick={onExtend}
-            disabled={!match}
-            aria-label="延長兩分鐘"
-          >
-            <Plus className="size-4" />
-          </Button>
         </div>
       ) : null}
     </section>

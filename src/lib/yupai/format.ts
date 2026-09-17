@@ -29,6 +29,22 @@ export function currentWaitSec(
   return waitTotalSec + extra;
 }
 
+export function elapsedMatchMs(
+  startedAt: string | null,
+  pauseAccumulatedMs: number,
+  pausedAt: string | null,
+  now: number,
+): number {
+  if (!startedAt) return 0;
+  const started = Date.parse(startedAt);
+  const pausedNow = pausedAt ? Math.max(0, now - Date.parse(pausedAt)) : 0;
+  return Math.max(0, now - started - pauseAccumulatedMs - pausedNow);
+}
+
+export function matchBudgetMs(durationMin: number, extendedSec: number): number {
+  return durationMin * 60_000 + extendedSec * 1000;
+}
+
 export function remainingMatchMs(
   startedAt: string | null,
   durationMin: number,
@@ -37,18 +53,16 @@ export function remainingMatchMs(
   pausedAt: string | null,
   now: number,
 ): number {
-  if (!startedAt) return durationMin * 60_000;
-  const started = Date.parse(startedAt);
-  const pausedNow = pausedAt ? Math.max(0, now - Date.parse(pausedAt)) : 0;
-  const elapsed = now - started - pauseAccumulatedMs - pausedNow;
-  const total = durationMin * 60_000 + extendedSec * 1000;
-  return total - elapsed;
+  return (
+    matchBudgetMs(durationMin, extendedSec) -
+    elapsedMatchMs(startedAt, pauseAccumulatedMs, pausedAt, now)
+  );
 }
 
 export function todayISO(d = new Date()): string {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
+  const day = String(d.getDate()).toString().padStart(2, "0");
   return `${y}-${m}-${day}`;
 }
 

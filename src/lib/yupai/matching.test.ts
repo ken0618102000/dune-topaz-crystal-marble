@@ -131,6 +131,22 @@ describe("pickPairs", () => {
     assert.deepEqual([result.pairs[0]!.a, result.pairs[0]!.b].sort(), ["a", "b"]);
   });
 
+  it("有沒對過的人時不重逢", () => {
+    const result = pickPairs({
+      candidates: [cand("a", 10, 0), cand("b", 9, 0), cand("c", 2, 0)],
+      slotCount: 1,
+      meetings: new Map([[pairKey("a", "b"), 2]]),
+      lastOpponents: new Map(),
+      blacklist: new Set(),
+      preferred: [],
+      weights: WEIGHT_PRESETS.fair,
+      banRecent: false,
+    });
+    assert.equal(result.pairs.length, 1);
+    const ids = [result.pairs[0]!.a, result.pairs[0]!.b].sort();
+    assert.deepEqual(ids, ["a", "c"]);
+  });
+
   it("同一對手連打兩場後改配別人（人手足夠時）", () => {
     const result = pickPairs({
       candidates: [cand("a", 10, 2), cand("b", 9, 2), cand("c", 8, 0)],
@@ -333,7 +349,7 @@ describe("engine fillNext", () => {
     );
     assert.ok(!("error" in ended));
     if ("error" in ended) return;
-    assert.equal(ended.state.players.filter((p) => p.status === "force_rest").length, 2);
+    assert.equal(ended.state.players.filter((p) => p.status === "rest").length, 2);
     assert.equal(ended.state.matches.filter((m) => m.status === "live").length, 0);
     const again = applyAction(ended.state, { type: "fillNext" }, t0 + 13 * 60_000);
     assert.ok(!("error" in again));
@@ -341,6 +357,387 @@ describe("engine fillNext", () => {
     assert.equal(again.state.matches.filter((m) => m.status === "live").length, 0);
     assert.equal(again.state.players.filter((p) => p.status === "queued").length, 2);
     assert.match(again.message ?? "", /下一場排出 1 組/);
+  });
+
+  it("記分下場後下一場自動上場，休息區補進下一場", () => {
+    const a = restPlayer("a", 0);
+    const b = restPlayer("b", 1);
+    a.status = "on_court";
+    a.courtNo = 1;
+    a.lastWaitStart = null;
+    b.status = "on_court";
+    b.courtNo = 1;
+    b.lastWaitStart = null;
+    const c = restPlayer("c", 2);
+    const d = restPlayer("d", 3);
+    c.status = "queued";
+    c.courtNo = 1;
+    c.lastWaitStart = null;
+    d.status = "queued";
+    d.courtNo = 1;
+    d.lastWaitStart = null;
+    const t0 = 1_000_000_000_000;
+    const state: BoardState = {
+      session: emptySession({ courtCount: 1, forceRestAfterMatch: true }),
+      players: [a, b, c, d, restPlayer("e", 4), restPlayer("f", 5)],
+      restrictions: [],
+      matches: [
+        {
+          id: "m1",
+          courtNo: 1,
+          playerAId: "a",
+          playerBId: "b",
+          startedAt: new Date(t0).toISOString(),
+          endedAt: null,
+          source: "auto",
+          status: "live",
+          winnerId: null,
+          scoreA: null,
+          scoreB: null,
+          durationMin: 12,
+          extendedSec: 0,
+          pauseAccumulatedMs: 0,
+          pausedAt: null,
+        },
+      ],
+    };
+    const out = applyAction(
+      state,
+      { type: "endMatch", courtNo: 1, scoreA: 21, scoreB: 15 },
+      t0 + 8 * 60_000,
+    );
+    assert.ok(!("error" in out));
+    if ("error" in out) return;
+    const on = out.state.players
+      .filter((p) => p.status === "on_court")
+      .map((p) => p.id)
+      .sort();
+    assert.deepEqual(on, ["c", "d"]);
+    const queued = out.state.players
+      .filter((p) => p.status === "queued")
+      .map((p) => p.id)
+      .sort();
+    assert.deepEqual(queued, ["e", "f"]);
+    assert.deepEqual(
+      out.state.players.filter((p) => p.status === "rest").map((p) => p.id).sort(),
+      ["a", "b"],
+    );
+    assert.equal(out.state.matches.filter((m) => m.status === "live").length, 1);
+    assert.match(out.message ?? "", /上場 1 組/);
+    assert.match(out.message ?? "", /下一場排出 1 組/);
+  });
+
+  it("兩面場都在打時，排下一場把空的下一場填滿兩人", () => {
+    const t0 = 1_000_000_000_000;
+    const a = restPlayer("a", 0);
+    const b = restPlayer("b", 1);
+    const c = restPlayer("c", 2);
+    const d = restPlayer("d", 3);
+    a.status = "on_court";
+    a.courtNo = 1;
+    a.lastWaitStart = null;
+    b.status = "on_court";
+    b.courtNo = 1;
+    b.lastWaitStart = null;
+    c.status = "on_court";
+    c.courtNo = 2;
+    c.lastWaitStart = null;
+    d.status = "on_court";
+    d.courtNo = 2;
+    d.lastWaitStart = null;
+    const live = (id: string, courtNo: number, pa: string, pb: string) => ({
+      id,
+      courtNo,
+      playerAId: pa,
+      playerBId: pb,
+      startedAt: new Date(t0).toISOString(),
+      endedAt: null as string | null,
+      source: "auto" as const,
+      status: "live" as const,
+      winnerId: null as string | null,
+      scoreA: null as number | null,
+      scoreB: null as number | null,
+      durationMin: 12,
+      extendedSec: 0,
+      pauseAccumulatedMs: 0,
+      pausedAt: null as string | null,
+    });
+    const state: BoardState = {
+      session: emptySession({ courtCount: 2 }),
+      players: [a, b, c, d, restPlayer("e", 4), restPlayer("f", 5), restPlayer("g", 6), restPlayer("h", 7)],
+      restrictions: [],
+      matches: [live("m1", 1, "a", "b"), live("m2", 2, "c", "d")],
+    };
+    const out = applyAction(state, { type: "fillNext" }, t0 + 60_000);
+    assert.ok(!("error" in out));
+    if ("error" in out) return;
+    const q1 = out.state.players.filter((p) => p.status === "queued" && p.courtNo === 1);
+    const q2 = out.state.players.filter((p) => p.status === "queued" && p.courtNo === 2);
+    assert.equal(q1.length, 2);
+    assert.equal(q2.length, 2);
+    assert.equal(out.state.players.filter((p) => p.status === "on_court").length, 4);
+    assert.match(out.message ?? "", /下一場排出 2 組/);
+  });
+
+  it("手動拖進下一場的單人位，排下一場各補一個沒對過的對手", () => {
+    const t0 = 1_000_000_000_000;
+    const a = restPlayer("a", 0);
+    const b = restPlayer("b", 1);
+    a.status = "on_court";
+    a.courtNo = 1;
+    a.lastWaitStart = null;
+    b.status = "on_court";
+    b.courtNo = 1;
+    b.lastWaitStart = null;
+    const c = restPlayer("c", 2);
+    const d = restPlayer("d", 3);
+    c.status = "on_court";
+    c.courtNo = 2;
+    c.lastWaitStart = null;
+    d.status = "on_court";
+    d.courtNo = 2;
+    d.lastWaitStart = null;
+    const p1 = restPlayer("p1", 4);
+    p1.status = "queued";
+    p1.courtNo = 1;
+    p1.lastWaitStart = null;
+    const p2 = restPlayer("p2", 5);
+    p2.status = "queued";
+    p2.courtNo = 2;
+    p2.lastWaitStart = null;
+    const met = restPlayer("met", 10);
+    const fresh = restPlayer("fresh", 6);
+    const extra = restPlayer("extra", 7);
+    const state: BoardState = {
+      session: emptySession({ courtCount: 2 }),
+      players: [a, b, c, d, p1, p2, met, fresh, extra],
+      restrictions: [],
+      matches: [
+        {
+          id: "m1",
+          courtNo: 1,
+          playerAId: "a",
+          playerBId: "b",
+          startedAt: new Date(t0).toISOString(),
+          endedAt: null,
+          source: "auto",
+          status: "live",
+          winnerId: null,
+          scoreA: null,
+          scoreB: null,
+          durationMin: 12,
+          extendedSec: 0,
+          pauseAccumulatedMs: 0,
+          pausedAt: null,
+        },
+        {
+          id: "m2",
+          courtNo: 2,
+          playerAId: "c",
+          playerBId: "d",
+          startedAt: new Date(t0).toISOString(),
+          endedAt: null,
+          source: "auto",
+          status: "live",
+          winnerId: null,
+          scoreA: null,
+          scoreB: null,
+          durationMin: 12,
+          extendedSec: 0,
+          pauseAccumulatedMs: 0,
+          pausedAt: null,
+        },
+        {
+          id: "old",
+          courtNo: 1,
+          playerAId: "p1",
+          playerBId: "met",
+          startedAt: new Date(t0 - 20 * 60_000).toISOString(),
+          endedAt: new Date(t0 - 10 * 60_000).toISOString(),
+          source: "auto",
+          status: "completed",
+          winnerId: "p1",
+          scoreA: 21,
+          scoreB: 12,
+          durationMin: 12,
+          extendedSec: 0,
+          pauseAccumulatedMs: 0,
+          pausedAt: null,
+        },
+      ],
+    };
+    const out = applyAction(state, { type: "fillNext" }, t0 + 60_000);
+    assert.ok(!("error" in out));
+    if ("error" in out) return;
+    const q1 = out.state.players
+      .filter((p) => p.status === "queued" && p.courtNo === 1)
+      .map((p) => p.id)
+      .sort();
+    const q2 = out.state.players
+      .filter((p) => p.status === "queued" && p.courtNo === 2)
+      .map((p) => p.id)
+      .sort();
+    assert.equal(q1.length, 2);
+    assert.equal(q2.length, 2);
+    assert.ok(q1.includes("p1"));
+    assert.equal(q1.includes("met"), false);
+    assert.ok(q2.includes("p2"));
+    assert.match(out.message ?? "", /下一場排出 2 人/);
+  });
+
+  it("備戰只有 1 人時，下場補上沒對過的對手", () => {
+    const t0 = 1_000_000_000_000;
+    const a = restPlayer("a", 0);
+    const b = restPlayer("b", 1);
+    a.status = "on_court";
+    a.courtNo = 1;
+    a.lastWaitStart = null;
+    b.status = "on_court";
+    b.courtNo = 1;
+    b.lastWaitStart = null;
+    const x = restPlayer("x", 2);
+    x.status = "queued";
+    x.courtNo = 1;
+    x.lastWaitStart = null;
+    const y = restPlayer("y", 8);
+    const z = restPlayer("z", 3);
+    const state: BoardState = {
+      session: emptySession({ courtCount: 1, forceRestAfterMatch: true }),
+      players: [a, b, x, y, z],
+      restrictions: [],
+      matches: [
+        {
+          id: "m1",
+          courtNo: 1,
+          playerAId: "a",
+          playerBId: "b",
+          startedAt: new Date(t0).toISOString(),
+          endedAt: null,
+          source: "auto",
+          status: "live",
+          winnerId: null,
+          scoreA: null,
+          scoreB: null,
+          durationMin: 12,
+          extendedSec: 0,
+          pauseAccumulatedMs: 0,
+          pausedAt: null,
+        },
+        {
+          id: "old",
+          courtNo: 1,
+          playerAId: "x",
+          playerBId: "y",
+          startedAt: new Date(t0 - 20 * 60_000).toISOString(),
+          endedAt: new Date(t0 - 10 * 60_000).toISOString(),
+          source: "auto",
+          status: "completed",
+          winnerId: "x",
+          scoreA: 21,
+          scoreB: 15,
+          durationMin: 12,
+          extendedSec: 0,
+          pauseAccumulatedMs: 0,
+          pausedAt: null,
+        },
+      ],
+    };
+    const out = applyAction(
+      state,
+      { type: "endMatch", courtNo: 1, scoreA: 21, scoreB: 19 },
+      t0 + 8 * 60_000,
+    );
+    assert.ok(!("error" in out));
+    if ("error" in out) return;
+    const on = out.state.players
+      .filter((p) => p.status === "on_court")
+      .map((p) => p.id)
+      .sort();
+    assert.deepEqual(on, ["x", "z"]);
+  });
+
+  it("記分下場沒有下一場時，休息區自動補上場", () => {
+    const a = restPlayer("a", 0);
+    const b = restPlayer("b", 1);
+    a.status = "on_court";
+    a.courtNo = 1;
+    a.lastWaitStart = null;
+    b.status = "on_court";
+    b.courtNo = 1;
+    b.lastWaitStart = null;
+    const t0 = 1_000_000_000_000;
+    const state: BoardState = {
+      session: emptySession({ courtCount: 1, forceRestAfterMatch: true }),
+      players: [a, b, restPlayer("c", 2), restPlayer("d", 3)],
+      restrictions: [],
+      matches: [
+        {
+          id: "m1",
+          courtNo: 1,
+          playerAId: "a",
+          playerBId: "b",
+          startedAt: new Date(t0).toISOString(),
+          endedAt: null,
+          source: "auto",
+          status: "live",
+          winnerId: null,
+          scoreA: null,
+          scoreB: null,
+          durationMin: 12,
+          extendedSec: 0,
+          pauseAccumulatedMs: 0,
+          pausedAt: null,
+        },
+      ],
+    };
+    const out = applyAction(
+      state,
+      { type: "endMatch", courtNo: 1, scoreA: 21, scoreB: 19 },
+      t0 + 10 * 60_000,
+    );
+    assert.ok(!("error" in out));
+    if ("error" in out) return;
+    const on = out.state.players
+      .filter((p) => p.status === "on_court")
+      .map((p) => p.id)
+      .sort();
+    assert.deepEqual(on, ["c", "d"]);
+    assert.equal(out.state.players.filter((p) => p.status === "queued").length, 0);
+    assert.deepEqual(
+      out.state.players.filter((p) => p.status === "rest").map((p) => p.id).sort(),
+      ["a", "b"],
+    );
+    assert.match(out.message ?? "", /上場 1 組/);
+  });
+
+  it("從下一場拖走一個人，搭檔留在下一場", () => {
+    const a = restPlayer("a", 0);
+    const b = restPlayer("b", 1);
+    a.status = "queued";
+    a.courtNo = 1;
+    a.lastWaitStart = null;
+    b.status = "queued";
+    b.courtNo = 1;
+    b.lastWaitStart = null;
+    const state: BoardState = {
+      session: emptySession({ courtCount: 2 }),
+      players: [a, b],
+      restrictions: [],
+      matches: [],
+    };
+    const out = applyAction(
+      state,
+      { type: "move", playerIds: ["a"], dest: { zone: "rest" } },
+      1_000_000_000_000,
+    );
+    assert.ok(!("error" in out));
+    if ("error" in out) return;
+    const pa = out.state.players.find((p) => p.id === "a")!;
+    const pb = out.state.players.find((p) => p.id === "b")!;
+    assert.equal(pa.status, "rest");
+    assert.equal(pa.courtNo, null);
+    assert.equal(pb.status, "queued");
+    assert.equal(pb.courtNo, 1);
   });
 
   it("只有一面空場時休息區先進化下一場，剛下場的人這輪休息", () => {
@@ -397,34 +794,35 @@ describe("engine fillNext", () => {
     assert.match(out.message ?? "", /下一場排出 1 組/);
   });
 
-  it("空場會抽其他場的下一場上場", () => {
+  it("空場依上場順位補人：順位 1 先上，不綁原場地", () => {
+    const t0 = 1_000_000_000_000;
     const a = restPlayer("a", 0);
     const b = restPlayer("b", 1);
     a.status = "on_court";
-    a.courtNo = 2;
+    a.courtNo = 1;
     a.lastWaitStart = null;
     b.status = "on_court";
-    b.courtNo = 2;
+    b.courtNo = 1;
     b.lastWaitStart = null;
-    const c = restPlayer("c", 2);
-    const d = restPlayer("d", 3);
-    c.status = "queued";
-    c.courtNo = 2;
-    c.lastWaitStart = null;
-    d.status = "queued";
-    d.courtNo = 2;
-    d.lastWaitStart = null;
+    const e = restPlayer("e", 4);
+    const f = restPlayer("f", 5);
+    e.status = "queued";
+    e.courtNo = 1;
+    e.lastWaitStart = null;
+    f.status = "queued";
+    f.courtNo = 1;
+    f.lastWaitStart = null;
     const state: BoardState = {
-      session: emptySession({ courtCount: 2 }),
-      players: [a, b, c, d],
+      session: emptySession({ courtCount: 4 }),
+      players: [a, b, e, f],
       restrictions: [],
       matches: [
         {
-          id: "m2",
-          courtNo: 2,
+          id: "m1",
+          courtNo: 1,
           playerAId: "a",
           playerBId: "b",
-          startedAt: new Date(1_000_000_000_000).toISOString(),
+          startedAt: new Date(t0).toISOString(),
           endedAt: null,
           source: "auto",
           status: "live",
@@ -438,16 +836,76 @@ describe("engine fillNext", () => {
         },
       ],
     };
-    const out = applyAction(state, { type: "fillNext" }, 1_000_000_000_000 + 60_000);
+    const out = applyAction(state, { type: "fillNext" }, t0 + 60_000);
     assert.ok(!("error" in out));
     if ("error" in out) return;
-    const on1 = out.state.players
-      .filter((p) => p.status === "on_court" && p.courtNo === 1)
+    const on2 = out.state.players
+      .filter((p) => p.status === "on_court" && p.courtNo === 2)
       .map((p) => p.id)
       .sort();
-    assert.deepEqual(on1, ["c", "d"]);
-    assert.equal(out.state.players.find((p) => p.id === "a")!.courtNo, 2);
-    assert.equal(out.state.matches.filter((m) => m.status === "live").length, 2);
+    assert.deepEqual(on2, ["e", "f"]);
+    assert.deepEqual(
+      out.state.players.filter((p) => p.status === "on_court" && p.courtNo === 1).map((p) => p.id).sort(),
+      ["a", "b"],
+    );
+    assert.match(out.message ?? "", /上場 1 組/);
+  });
+
+  it("已開打時休息區先排進上場順位，不直接上場", () => {
+    const t0 = 1_000_000_000_000;
+    const liveOf = (id: string, courtNo: number, pa: string, pb: string) => ({
+      id,
+      courtNo,
+      playerAId: pa,
+      playerBId: pb,
+      startedAt: new Date(t0).toISOString(),
+      endedAt: null as string | null,
+      source: "auto" as const,
+      status: "live" as const,
+      winnerId: null as string | null,
+      scoreA: null as number | null,
+      scoreB: null as number | null,
+      durationMin: 12,
+      extendedSec: 0,
+      pauseAccumulatedMs: 0,
+      pausedAt: null as string | null,
+    });
+    const a = restPlayer("a", 0);
+    const b = restPlayer("b", 1);
+    const c = restPlayer("c", 2);
+    const d = restPlayer("d", 3);
+    a.status = "on_court";
+    a.courtNo = 1;
+    a.lastWaitStart = null;
+    b.status = "on_court";
+    b.courtNo = 1;
+    b.lastWaitStart = null;
+    c.status = "on_court";
+    c.courtNo = 2;
+    c.lastWaitStart = null;
+    d.status = "on_court";
+    d.courtNo = 2;
+    d.lastWaitStart = null;
+    const state: BoardState = {
+      session: emptySession({ courtCount: 4 }),
+      players: [a, b, c, d, restPlayer("e", 4), restPlayer("f", 5), restPlayer("g", 6), restPlayer("h", 7)],
+      restrictions: [],
+      matches: [liveOf("m1", 1, "a", "b"), liveOf("m2", 2, "c", "d")],
+    };
+    const out = applyAction(state, { type: "fillNext" }, t0 + 60_000);
+    assert.ok(!("error" in out));
+    if ("error" in out) return;
+    assert.equal(out.state.players.filter((p) => p.status === "on_court" && p.courtNo === 3).length, 0);
+    assert.equal(out.state.players.filter((p) => p.status === "on_court" && p.courtNo === 4).length, 0);
+    assert.equal(out.state.players.filter((p) => p.status === "queued" && p.courtNo === 1).length, 2);
+    assert.equal(out.state.players.filter((p) => p.status === "queued" && p.courtNo === 2).length, 2);
+    assert.match(out.message ?? "", /下一場排出 2 組/);
+    const again = applyAction(out.state, { type: "fillNext" }, t0 + 120_000);
+    assert.ok(!("error" in again));
+    if ("error" in again) return;
+    assert.equal(again.state.players.filter((p) => p.status === "on_court" && p.courtNo === 3).length, 2);
+    assert.equal(again.state.players.filter((p) => p.status === "on_court" && p.courtNo === 4).length, 2);
+    assert.match(again.message ?? "", /上場 2 組/);
   });
 
   it("人已在打時再排會說明空場原因", () => {

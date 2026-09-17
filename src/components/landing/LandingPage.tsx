@@ -229,7 +229,7 @@ export function LandingPage() {
           <ul className="space-y-2 text-sm text-muted-foreground">
             <li>程度用 1–18 級。下場填比分後會依分差微調實力，下一場配對跟著變。</li>
             <li>單打固定賽制，一面場兩人。開場時可選 1–6 面。</li>
-            <li>自動配對只填空場與下一場，不動正在打的人。</li>
+            <li>自動配對先填上場順位，空場再依順位上場，不動正在打的人。</li>
             <li>不做訂場、報名、繳費或會員系統。</li>
           </ul>
         </div>
