@@ -69,7 +69,7 @@
 - 建立場次的裝置拿到 `hostToken`，才能改棋盤
 - 樂觀鎖（`version` CAS）：兩台同時寫入時後到的會被退回並提示
 - 單步撤銷
-- 4 位數移交碼，5 分鐘內可把主控交給另一台裝置
+- 6 碼移交碼，5 分鐘內可把主控交給另一台裝置；連續錯 5 次即作廢，接下後主控密鑰會換新
 
 ---
 
@@ -88,7 +88,7 @@
 
 ### Windows 一鍵（現場筆電）
 
-1. 下載倉庫 ZIP：[ken0618102000/autumn-lark-bison-dawn](https://github.com/ken0618102000/autumn-lark-bison-dawn) → Code → Download ZIP，解壓縮。
+1. 下載倉庫 ZIP：[ken0618102000/dune-topaz-crystal-marble](https://github.com/ken0618102000/dune-topaz-crystal-marble) → Code → Download ZIP，解壓縮。
 2. 雙擊 **`一鍵啟動.bat`**。沒裝 Node 會自動裝，瀏覽器會自己打開看板。
 3. 手機 / 平板連同一 Wi-Fi，用視窗裡印的區網網址進入。場次存在 `data\`，關掉再開還在。
 
@@ -99,8 +99,8 @@
 不必設定資料庫。沒有 `DATABASE_URL` 時用內嵌 PGLite。開發模式重啟後記憶體資料會清空；Windows 一鍵啟動會把資料寫進 `data\`。
 
 ```bash
-git clone https://github.com/ken0618102000/autumn-lark-bison-dawn.git
-cd autumn-lark-bison-dawn
+git clone https://github.com/ken0618102000/dune-topaz-crystal-marble.git
+cd dune-topaz-crystal-marble
 npm install
 npm run dev
 ```

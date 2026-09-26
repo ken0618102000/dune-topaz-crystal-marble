@@ -296,7 +296,7 @@ export function SettingsSheet({ open, onOpenChange, api, session, players, restr
               }}
             >
               <Label htmlFor="xfer">移交碼</Label>
-              <Input id="xfer" name="pin" placeholder="四位數字" maxLength={4} />
+              <Input id="xfer" name="pin" placeholder="六碼" maxLength={6} className="uppercase" />
               <Button type="submit" variant="outline">
                 用移交碼接下主控
               </Button>

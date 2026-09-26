@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import type { BoardAction, BoardPayload, CreateSessionInput } from "./types.ts";
+import { boardActionSchema } from "./action-schema.ts";
+import type { BoardPayload, CreateSessionInput } from "./types.ts";
 
 const creds = z.object({
   code: z.string().min(4).max(12),
@@ -91,7 +92,7 @@ export const mutateBoardFn = createServerFn({ method: "POST" })
       hostToken: z.string(),
       deviceId: z.string(),
       expectedVersion: z.number(),
-      action: z.custom<BoardAction>(),
+      action: boardActionSchema,
     }),
   )
   .handler(async ({ data }) => {

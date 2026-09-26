@@ -1,4 +1,5 @@
-import { getSql, type Sql } from "@/lib/db";
+import { timingSafeEqual } from "node:crypto";
+import { getSql, withTransaction, type Sql } from "@/lib/db";
 import { applyAction, snapshotOf } from "./engine.ts";
 import { buildDemoState } from "./demo.ts";
 import { hostToken, newId, sessionCode, transferPin } from "./ids.ts";
@@ -36,6 +37,14 @@ function asIso(v: unknown): string | null {
 
 function asText(v: unknown): string {
   return v == null ? "" : String(v);
+}
+
+function tokenEquals(a: string | null | undefined, b: string | null | undefined): boolean {
+  if (!a || !b) return false;
+  const left = Buffer.from(a);
+  const right = Buffer.from(b);
+  if (left.length !== right.length) return false;
+  return timingSafeEqual(left, right);
 }
 
 type SessionRow = Record<string, unknown>;
@@ -135,22 +144,31 @@ async function loadRow(sql: Sql, code: string): Promise<SessionRow | null> {
   return rows[0] ?? null;
 }
 
-export async function loadState(code: string): Promise<{
+export async function loadState(code: string) {
+  return loadStateWith(await getSql(), code);
+}
+
+async function loadStateWith(sql: Sql, code: string): Promise<{
   row: SessionRow;
   state: BoardState;
   hostToken: string;
   canUndo: boolean;
 } | null> {
-  const sql = await getSql();
   const row = await loadRow(sql, code);
   if (!row) return null;
   const sessionId = asText(row.id);
-  const [players, restrictions, matches, ops] = await Promise.all([
-    sql.query("select * from yupai_players where session_id = $1 order by sort_order, created_at", [sessionId]),
-    sql.query("select * from yupai_restrictions where session_id = $1", [sessionId]),
-    sql.query("select * from yupai_matches where session_id = $1 order by created_at", [sessionId]),
-    sql.query("select id from yupai_ops where session_id = $1 limit 1", [sessionId]),
+  const players = await sql.query(
+    "select * from yupai_players where session_id = $1 order by sort_order, created_at",
+    [sessionId],
+  );
+  const restrictions = await sql.query("select * from yupai_restrictions where session_id = $1", [
+    sessionId,
   ]);
+  const matches = await sql.query(
+    "select * from yupai_matches where session_id = $1 order by created_at",
+    [sessionId],
+  );
+  const ops = await sql.query("select id from yupai_ops where session_id = $1 limit 1", [sessionId]);
   return {
     row,
     hostToken: asText(row.host_token),
@@ -169,7 +187,7 @@ function flags(
   givenToken?: string,
   deviceId?: string,
 ) {
-  const isHost = Boolean(givenToken && givenToken === loaded.hostToken);
+  const isHost = tokenEquals(givenToken, loaded.hostToken);
   const isController = Boolean(
     isHost &&
       deviceId &&
@@ -225,6 +243,7 @@ async function writeState(sql: Sql, state: BoardState) {
       controller_device_id = $18,
       transfer_pin = $19,
       transfer_pin_expires_at = $20,
+      version = $21,
       updated_at = now()
     where id = $1`,
     [
@@ -248,6 +267,7 @@ async function writeState(sql: Sql, state: BoardState) {
       s.controllerDeviceId,
       s.transferPin,
       s.transferPinExpiresAt,
+      s.version,
     ],
   );
 
@@ -319,15 +339,6 @@ async function writeState(sql: Sql, state: BoardState) {
       ],
     );
   }
-}
-
-async function casVersion(sql: Sql, sessionId: string, expected: number): Promise<number | null> {
-  const rows = await sql.query<{ version: number }>(
-    `update yupai_sessions set version = version + 1, updated_at = now()
-     where id = $1 and version = $2 returning version`,
-    [sessionId, expected],
-  );
-  return rows[0]?.version ?? null;
 }
 
 async function pushUndo(sql: Sql, sessionId: string, action: string, before: BoardState) {
@@ -404,6 +415,16 @@ export async function fetchBoard(input: {
   return boardPayload(loaded, input.hostToken, input.deviceId);
 }
 
+const MAX_TRANSFER_ATTEMPTS = 5;
+
+async function lockSession(sql: Sql, code: string) {
+  const rows = await sql.query<SessionRow>(
+    "select * from yupai_sessions where code = $1 for update",
+    [code.trim().toUpperCase()],
+  );
+  return rows[0] ?? null;
+}
+
 export async function mutateBoard(input: {
   code: string;
   hostToken: string;
@@ -411,44 +432,37 @@ export async function mutateBoard(input: {
   expectedVersion: number;
   action: BoardAction;
 }): Promise<BoardPayload | { error: string }> {
-  const loaded = await loadState(input.code);
-  if (!loaded) return { error: "找不到這個場次碼" };
-  if (input.hostToken !== loaded.hostToken) {
-    return { error: "沒有主控權限" };
-  }
-  if (loaded.state.session.controllerDeviceId !== input.deviceId) {
-    return { error: "主控已在另一台裝置。請先取得主控。" };
-  }
+  return withTransaction(async (sql) => {
+    const row = await lockSession(sql, input.code);
+    if (!row) return { error: "找不到這個場次碼" };
+    if (!tokenEquals(input.hostToken, asText(row.host_token))) return { error: "沒有主控權限" };
+    if (asText(row.controller_device_id) !== input.deviceId) {
+      return { error: "主控已在另一台裝置。請先取得主控。" };
+    }
+    if (asInt(row.version, 1) !== input.expectedVersion) {
+      const fresh = await loadStateWith(sql, input.code);
+      if (!fresh) return { error: "找不到這個場次碼" };
+      return boardPayload(fresh, input.hostToken, input.deviceId, {
+        conflict: true,
+        warning: "看板已由其他操作更新，未套用這一步",
+      });
+    }
 
-  const sql = await getSql();
-  const newVersion = await casVersion(sql, loaded.state.session.id, input.expectedVersion);
-  if (newVersion == null) {
-    const fresh = await loadState(input.code);
-    if (!fresh) return { error: "找不到這個場次碼" };
+    const loaded = await loadStateWith(sql, input.code);
+    if (!loaded) return { error: "找不到這個場次碼" };
+    const before = snapshotOf(loaded.state);
+    const result = applyAction(loaded.state, input.action);
+    if ("error" in result) return { error: result.error };
+
+    result.state.session.version = input.expectedVersion + 1;
+    await pushUndo(sql, result.state.session.id, input.action.type, before);
+    await writeState(sql, result.state);
+    const fresh = await loadStateWith(sql, input.code);
+    if (!fresh) return { error: "寫入後讀取失敗" };
     return boardPayload(fresh, input.hostToken, input.deviceId, {
-      conflict: true,
-      warning: "看板已由其他操作更新，未套用這一步",
+      message: result.message,
+      warning: result.warning,
     });
-  }
-
-  const before = snapshotOf(loaded.state);
-  const result = applyAction(loaded.state, input.action);
-  if ("error" in result) {
-    await sql.query(
-      "update yupai_sessions set version = $2 where id = $1",
-      [loaded.state.session.id, input.expectedVersion],
-    );
-    return { error: result.error };
-  }
-
-  result.state.session.version = newVersion;
-  await pushUndo(sql, result.state.session.id, input.action.type, before);
-  await writeState(sql, result.state);
-  const fresh = await loadState(input.code);
-  if (!fresh) return { error: "寫入後讀取失敗" };
-  return boardPayload(fresh, input.hostToken, input.deviceId, {
-    message: result.message,
-    warning: result.warning,
   });
 }
 
@@ -458,40 +472,40 @@ export async function undoBoard(input: {
   deviceId: string;
   expectedVersion: number;
 }): Promise<BoardPayload | { error: string }> {
-  const loaded = await loadState(input.code);
-  if (!loaded) return { error: "找不到這個場次碼" };
-  if (input.hostToken !== loaded.hostToken) return { error: "沒有主控權限" };
-  if (loaded.state.session.controllerDeviceId !== input.deviceId) {
-    return { error: "主控已在另一台裝置。請先取得主控。" };
-  }
-  const sql = await getSql();
-  const ops = await sql.query<{ id: string; before_json: unknown }>(
-    "select id, before_json from yupai_ops where session_id = $1 order by created_at desc limit 1",
-    [loaded.state.session.id],
-  );
-  const op = ops[0];
-  if (!op) return { error: "沒有可撤銷的步驟" };
+  return withTransaction(async (sql) => {
+    const row = await lockSession(sql, input.code);
+    if (!row) return { error: "找不到這個場次碼" };
+    if (!tokenEquals(input.hostToken, asText(row.host_token))) return { error: "沒有主控權限" };
+    if (asText(row.controller_device_id) !== input.deviceId) {
+      return { error: "主控已在另一台裝置。請先取得主控。" };
+    }
+    if (asInt(row.version, 1) !== input.expectedVersion) {
+      const fresh = await loadStateWith(sql, input.code);
+      if (!fresh) return { error: "找不到這個場次碼" };
+      return boardPayload(fresh, input.hostToken, input.deviceId, {
+        conflict: true,
+        warning: "看板已更新，撤銷未套用",
+      });
+    }
 
-  const newVersion = await casVersion(sql, loaded.state.session.id, input.expectedVersion);
-  if (newVersion == null) {
-    const fresh = await loadState(input.code);
-    if (!fresh) return { error: "找不到這個場次碼" };
-    return boardPayload(fresh, input.hostToken, input.deviceId, {
-      conflict: true,
-      warning: "看板已更新，撤銷未套用",
-    });
-  }
+    const ops = await sql.query<{ id: string; before_json: unknown }>(
+      "select id, before_json from yupai_ops where session_id = $1 order by created_at desc limit 1",
+      [asText(row.id)],
+    );
+    const op = ops[0];
+    if (!op) return { error: "沒有可撤銷的步驟" };
 
-  const raw = typeof op.before_json === "string" ? JSON.parse(op.before_json) : op.before_json;
-  const restored = raw as BoardState;
-  restored.session.version = newVersion;
-  restored.session.id = loaded.state.session.id;
-  restored.session.code = loaded.state.session.code;
-  await writeState(sql, restored);
-  await sql.query("delete from yupai_ops where id = $1", [op.id]);
-  const fresh = await loadState(input.code);
-  if (!fresh) return { error: "撤銷後讀取失敗" };
-  return boardPayload(fresh, input.hostToken, input.deviceId, { message: "已撤銷上一步" });
+    const raw = typeof op.before_json === "string" ? JSON.parse(op.before_json) : op.before_json;
+    const restored = raw as BoardState;
+    restored.session.version = input.expectedVersion + 1;
+    restored.session.id = asText(row.id);
+    restored.session.code = asText(row.code);
+    await writeState(sql, restored);
+    await sql.query("delete from yupai_ops where id = $1", [op.id]);
+    const fresh = await loadStateWith(sql, input.code);
+    if (!fresh) return { error: "撤銷後讀取失敗" };
+    return boardPayload(fresh, input.hostToken, input.deviceId, { message: "已撤銷上一步" });
+  });
 }
 
 export async function claimControl(input: {
@@ -501,10 +515,10 @@ export async function claimControl(input: {
 }): Promise<BoardPayload | { error: string }> {
   const loaded = await loadState(input.code);
   if (!loaded) return { error: "找不到這個場次碼" };
-  if (input.hostToken !== loaded.hostToken) return { error: "主控密鑰不正確" };
+  if (!tokenEquals(input.hostToken, loaded.hostToken)) return { error: "主控密鑰不正確" };
   const sql = await getSql();
   await sql.query(
-    "update yupai_sessions set controller_device_id = $2, transfer_pin = null, transfer_pin_expires_at = null, version = version + 1 where id = $1",
+    "update yupai_sessions set controller_device_id = $2, transfer_pin = null, transfer_pin_expires_at = null, transfer_attempts = 0, version = version + 1 where id = $1",
     [loaded.state.session.id, input.deviceId],
   );
   const fresh = await loadState(input.code);
@@ -519,7 +533,7 @@ export async function startHostTransfer(input: {
 }): Promise<{ pin: string } | { error: string }> {
   const loaded = await loadState(input.code);
   if (!loaded) return { error: "找不到這個場次碼" };
-  if (input.hostToken !== loaded.hostToken) return { error: "沒有主控權限" };
+  if (!tokenEquals(input.hostToken, loaded.hostToken)) return { error: "沒有主控權限" };
   if (loaded.state.session.controllerDeviceId !== input.deviceId) {
     return { error: "請用目前主控裝置移交" };
   }
@@ -527,7 +541,7 @@ export async function startHostTransfer(input: {
   const sql = await getSql();
   const expires = new Date(Date.now() + 5 * 60_000).toISOString();
   await sql.query(
-    "update yupai_sessions set transfer_pin = $2, transfer_pin_expires_at = $3, version = version + 1 where id = $1",
+    "update yupai_sessions set transfer_pin = $2, transfer_pin_expires_at = $3, transfer_attempts = 0, version = version + 1 where id = $1",
     [loaded.state.session.id, pin, expires],
   );
   return { pin };
@@ -538,25 +552,57 @@ export async function acceptHostTransfer(input: {
   pin: string;
   deviceId: string;
 }): Promise<{ payload: BoardPayload; hostToken: string } | { error: string }> {
-  const loaded = await loadState(input.code);
-  if (!loaded) return { error: "找不到這個場次碼" };
-  const pin = input.pin.trim();
-  if (!loaded.state.session.transferPin || loaded.state.session.transferPin !== pin) {
-    return { error: "移交碼不正確" };
-  }
-  const exp = loaded.state.session.transferPinExpiresAt;
-  if (exp && Date.parse(exp) < Date.now()) return { error: "移交碼已過期" };
-  const sql = await getSql();
-  await sql.query(
-    "update yupai_sessions set controller_device_id = $2, transfer_pin = null, transfer_pin_expires_at = null, version = version + 1 where id = $1",
-    [loaded.state.session.id, input.deviceId],
-  );
-  const fresh = await loadState(input.code);
-  if (!fresh) return { error: "讀取失敗" };
-  return {
-    hostToken: fresh.hostToken,
-    payload: boardPayload(fresh, fresh.hostToken, input.deviceId, {
-      message: "已接下主控",
-    }),
-  };
+  return withTransaction(async (sql) => {
+    const row = await lockSession(sql, input.code);
+    if (!row) return { error: "找不到這個場次碼" };
+    const pin = input.pin.trim().toUpperCase();
+    const current = row.transfer_pin ? asText(row.transfer_pin) : "";
+    const exp = asIso(row.transfer_pin_expires_at);
+    const sessionId = asText(row.id);
+
+    if (!current) return { error: "目前沒有有效的移交碼" };
+    if (exp && Date.parse(exp) < Date.now()) {
+      await sql.query(
+        "update yupai_sessions set transfer_pin = null, transfer_pin_expires_at = null, transfer_attempts = 0 where id = $1",
+        [sessionId],
+      );
+      return { error: "移交碼已過期" };
+    }
+    if (current !== pin) {
+      const attempts = asInt(row.transfer_attempts) + 1;
+      if (attempts >= MAX_TRANSFER_ATTEMPTS) {
+        await sql.query(
+          "update yupai_sessions set transfer_pin = null, transfer_pin_expires_at = null, transfer_attempts = 0 where id = $1",
+          [sessionId],
+        );
+        return { error: "移交碼錯誤次數過多，已作廢，請重新產生" };
+      }
+      await sql.query("update yupai_sessions set transfer_attempts = $2 where id = $1", [
+        sessionId,
+        attempts,
+      ]);
+      return { error: "移交碼不正確" };
+    }
+
+    const nextToken = hostToken();
+    await sql.query(
+      `update yupai_sessions set
+         controller_device_id = $2,
+         host_token = $3,
+         transfer_pin = null,
+         transfer_pin_expires_at = null,
+         transfer_attempts = 0,
+         version = version + 1
+       where id = $1`,
+      [sessionId, input.deviceId, nextToken],
+    );
+    const fresh = await loadStateWith(sql, input.code);
+    if (!fresh) return { error: "讀取失敗" };
+    return {
+      hostToken: nextToken,
+      payload: boardPayload(fresh, nextToken, input.deviceId, {
+        message: "已接下主控",
+      }),
+    };
+  });
 }

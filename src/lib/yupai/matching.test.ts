@@ -950,6 +950,91 @@ describe("engine fillNext", () => {
     assert.ok((out.warning ?? "").includes("休息區沒人可排下一場"));
   });
 
+  it("下場後強制休息，連續打滿也會強制休息", () => {
+    const a = restPlayer("a", 0);
+    const b = restPlayer("b", 1);
+    a.status = "on_court";
+    b.status = "on_court";
+    a.courtNo = 1;
+    b.courtNo = 1;
+    a.lastWaitStart = null;
+    b.lastWaitStart = null;
+    a.consecutivePlayed = 1;
+    b.consecutivePlayed = 0;
+    const t0 = 1_000_000_000_000;
+    const state: BoardState = {
+      session: emptySession({ courtCount: 1, forceRestAfterMatch: false, consecutiveLimit: 2 }),
+      players: [a, b],
+      restrictions: [],
+      matches: [
+        {
+          id: "m1",
+          courtNo: 1,
+          playerAId: "a",
+          playerBId: "b",
+          startedAt: new Date(t0).toISOString(),
+          endedAt: null,
+          source: "auto",
+          status: "live",
+          winnerId: null,
+          scoreA: null,
+          scoreB: null,
+          durationMin: 12,
+          extendedSec: 0,
+          pauseAccumulatedMs: 0,
+          pausedAt: null,
+        },
+      ],
+    };
+    const out = applyAction(state, { type: "endMatch", courtNo: 1 }, t0 + 60_000);
+    assert.ok(!("error" in out));
+    if ("error" in out) return;
+    const byId = new Map(out.state.players.map((p) => [p.id, p]));
+    assert.equal(byId.get("a")?.status, "rest");
+    assert.equal(byId.get("a")?.consecutivePlayed, 0);
+    assert.equal(byId.get("b")?.consecutivePlayed, 1);
+    const forced = emptySession({ courtCount: 1, forceRestAfterMatch: true, consecutiveLimit: 4 });
+    const again = structuredClone(state);
+    again.session = forced;
+    again.players[0]!.consecutivePlayed = 0;
+    const forcedOut = applyAction(again, { type: "endMatch", courtNo: 1 }, t0 + 60_000);
+    assert.ok(!("error" in forcedOut));
+    if ("error" in forcedOut) return;
+    assert.ok(forcedOut.state.players.every((p) => p.consecutivePlayed === 0 && p.status === "rest"));
+  });
+
+  it("縮小面數會把多出來的場與順位送回休息區", () => {
+    const a = restPlayer("a", 0);
+    const b = restPlayer("b", 1);
+    const c = restPlayer("c", 2);
+    a.status = "on_court";
+    b.status = "on_court";
+    a.courtNo = 2;
+    b.courtNo = 2;
+    a.lastWaitStart = null;
+    b.lastWaitStart = null;
+    c.status = "queued";
+    c.courtNo = 2;
+    const state: BoardState = {
+      session: emptySession({ courtCount: 2 }),
+      players: [a, b, c],
+      restrictions: [],
+      matches: [],
+    };
+    const out = applyAction(
+      state,
+      {
+        type: "updateSettings",
+        patch: { courtCount: 1 },
+      },
+      1_000_000_000_000,
+    );
+    assert.ok(!("error" in out));
+    if ("error" in out) return;
+    assert.equal(out.state.session.courtCount, 1);
+    assert.ok(out.state.players.every((p) => p.status === "rest" && p.courtNo == null));
+  });
+
   it("拖去休息區會清連續場數", () => {
     const a = restPlayer("a", 0);
     a.status = "queued";

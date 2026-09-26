@@ -49,7 +49,7 @@ nvm use 22
 
 給現場那台 Windows 筆電 / 桌機：不用開終端機、不用先裝資料庫。
 
-1. 到 [倉庫頁](https://github.com/ken0618102000/autumn-lark-bison-dawn) 按 **Code → Download ZIP**，解壓縮。
+1. 到 [倉庫頁](https://github.com/ken0618102000/dune-topaz-crystal-marble) 按 **Code → Download ZIP**，解壓縮。
 2. 打開解壓後的資料夾，**雙擊 `一鍵啟動.bat`**。
 3. 第一次會代裝 Node.js（若還沒有）並下載套件，之後再開就只要等瀏覽器跳出來。
 4. 團主用跳出的視窗看板；球友手機連 **同一 Wi-Fi**，網址用視窗裡印的 `http://區網IP:8080`。
@@ -68,8 +68,8 @@ nvm use 22
 ### 1. 取得原始碼
 
 ```bash
-git clone https://github.com/ken0618102000/autumn-lark-bison-dawn.git
-cd autumn-lark-bison-dawn
+git clone https://github.com/ken0618102000/dune-topaz-crystal-marble.git
+cd dune-topaz-crystal-marble
 ```
 
 ### 2. 安裝依賴
@@ -190,6 +190,7 @@ Schema 只來自 `migrations/` **根目錄** 的 `*.sql`，依檔名排序、各
 |---|---|---|
 | `migrations/0002_yupai.sql` | 會 | 羽排五張表 |
 | `migrations/0003_skill18_rating.sql` | 會 | 程度 1–18 與 seed_skill |
+| `migrations/0004_transfer_attempts.sql` | 會 | 移交碼錯誤次數 |
 | `migrations/auth/0001_auth.sql` | **不會** | 子目錄，登入未開所以不套用 |
 
 套用方式：
@@ -259,7 +260,7 @@ npm run preview:restart   # 先殺掉舊的再起
 
 ### 2. 匯入專案
 
-[Vercel](https://vercel.com) → Add New → 連 GitHub → 選 `ken0618102000/autumn-lark-bison-dawn`。
+[Vercel](https://vercel.com) → Add New → 連 GitHub → 選 `ken0618102000/dune-topaz-crystal-marble`。
 
 建置設定（通常自動偵測，對一下即可）：
 
@@ -353,7 +354,7 @@ Reverse proxy（Caddy / nginx）請把 WebSocket 以外的一般 HTTPS 轉到應
 實務建議：
 
 - 場次碼可以貼群組；**不要把主控裝置借來借去還開著同一個瀏覽器 profile**。
-- 要換平板：在舊裝置產生移交碼，新裝置輸入 PIN（5 分鐘內）。
+- 要換平板：在舊裝置產生移交碼，新裝置輸入 6 碼（5 分鐘內，錯 5 次作廢）。接下後舊裝置的主控密鑰會失效。
 - HTTPS 必備（Vercel 預設有）。HTTP 的 `localStorage` 與 cookie 行為在部分手機不可靠。
 - 資料列沒有 `user_id`。知道場次碼等於能讀整份名單與戰績，不要把身分證字號、電話寫進暱稱。
 - 正式環境務必設 `DATABASE_URL`。沒設的話每個 serverless instance 都是空棋盤，還可能寫進互不相通的記憶體 DB。

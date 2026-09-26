@@ -17,6 +17,5 @@ export function hostToken(): string {
 }
 
 export function transferPin(): string {
-  const n = crypto.getRandomValues(new Uint32Array(1))[0] % 10000;
-  return n.toString().padStart(4, "0");
+  return sessionCode(6);
 }
