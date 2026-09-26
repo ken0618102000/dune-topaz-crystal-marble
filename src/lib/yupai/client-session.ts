@@ -76,3 +76,7 @@ export function readSelfId(code: string): string | null {
 export function writeSelfId(code: string, playerId: string) {
   localStorage.setItem(selfKey(code), playerId);
 }
+
+export function clearSelfId(code: string) {
+  localStorage.removeItem(selfKey(code));
+}

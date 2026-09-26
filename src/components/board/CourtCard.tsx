@@ -1,4 +1,4 @@
-import { Pause, Play, Square } from "lucide-react";
+import { Pause, Play, Square, Timer } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { elapsedMatchMs, formatClock, matchBudgetMs } from "@/lib/yupai/format";
 import type { Match, Player } from "@/lib/yupai/types";
@@ -14,9 +14,11 @@ type Props = {
   canEdit: boolean;
   scoringEnabled?: boolean;
   idleLabel?: string;
+  dropActive?: boolean;
   onEnd: () => void;
   onPause: () => void;
   onResume: () => void;
+  onExtend?: () => void;
   onPointerPlayer: (player: Player, e: React.PointerEvent<HTMLButtonElement>) => void;
 };
 
@@ -29,9 +31,11 @@ export function CourtCard({
   canEdit,
   scoringEnabled,
   idleLabel,
+  dropActive,
   onEnd,
   onPause,
   onResume,
+  onExtend,
   onPointerPlayer,
 }: Props) {
   const elapsed = match
@@ -52,6 +56,7 @@ export function CourtCard({
       className={cn(
         "flex min-w-56 flex-col rounded-xl bg-court p-3",
         overtime && "court-overtime",
+        dropActive && "ring-2 ring-primary",
       )}
     >
       <header className="mb-2 flex items-center justify-between gap-2">
@@ -131,6 +136,17 @@ export function CourtCard({
               <Play className="size-4" />
             </Button>
           )}
+          {match && onExtend ? (
+            <Button
+              size="icon"
+              variant="secondary"
+              onClick={onExtend}
+              aria-label="延長 5 分"
+              title="延長 5 分"
+            >
+              <Timer className="size-4" />
+            </Button>
+          ) : null}
         </div>
       ) : null}
     </section>

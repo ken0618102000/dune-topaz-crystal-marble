@@ -35,6 +35,8 @@ export function RosterSheet({ open, onOpenChange, api, players }: Props) {
   const [dropIn, setDropIn] = useState(false);
   const [csv, setCsv] = useState("");
   const [editSkillId, setEditSkillId] = useState<string | null>(null);
+  const [renameId, setRenameId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
   const frequent = readFrequent();
   const canEdit = api.canEdit;
 
@@ -44,7 +46,7 @@ export function RosterSheet({ open, onOpenChange, api, players }: Props) {
         <SheetHeader>
           <SheetTitle>當日名單</SheetTitle>
           <SheetDescription>
-            加入後會進休息區，可直接按「排下一場」。暱稱不可重複；臨打不會寫入常用名單。
+            加入後會進休息區，按「補順位」再「空場上場」。暱稱不可重複；臨打不會寫入常用名單。
           </SheetDescription>
         </SheetHeader>
         <div className="flex flex-col gap-6 p-6">
@@ -123,16 +125,40 @@ export function RosterSheet({ open, onOpenChange, api, players }: Props) {
             {players.map((p) => (
               <div key={p.id} className="rounded-lg bg-secondary px-3 py-2">
                 <div className="flex items-center justify-between gap-2">
-                  <div>
-                    <p className="font-medium">{p.nickname}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {STATUS_LABELS[p.status]} · {formatSkill(p.skill)} {skillBand(p.skill)}
-                      {Math.abs(p.skill - p.seedSkill) >= 0.15
-                        ? `（開場 ${formatSkill(p.seedSkill)}）`
-                        : ""}{" "}
-                      · {p.playCount} 場
-                      {p.isDropIn ? " · 臨打" : ""}
-                    </p>
+                  <div className="min-w-0 flex-1">
+                    {canEdit && renameId === p.id ? (
+                      <form
+                        className="flex gap-2"
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          if (!renameValue.trim()) return;
+                          api.run({ type: "renamePlayer", playerId: p.id, nickname: renameValue });
+                          setRenameId(null);
+                        }}
+                      >
+                        <Input
+                          value={renameValue}
+                          onChange={(e) => setRenameValue(e.target.value)}
+                          maxLength={16}
+                          autoFocus
+                        />
+                        <Button type="submit" size="sm">
+                          存
+                        </Button>
+                      </form>
+                    ) : (
+                      <>
+                        <p className="font-medium">{p.nickname}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {STATUS_LABELS[p.status]} · {formatSkill(p.skill)} {skillBand(p.skill)}
+                          {Math.abs(p.skill - p.seedSkill) >= 0.15
+                            ? `（開場 ${formatSkill(p.seedSkill)}）`
+                            : ""}{" "}
+                          · {p.playCount} 場
+                          {p.isDropIn ? " · 臨打" : ""}
+                        </p>
+                      </>
+                    )}
                   </div>
                   {canEdit ? (
                     <div className="flex gap-1">
@@ -149,10 +175,22 @@ export function RosterSheet({ open, onOpenChange, api, players }: Props) {
                       ) : null}
                       <Button
                         size="sm"
+                        variant={renameId === p.id ? "default" : "ghost"}
+                        onClick={() => {
+                          setRenameId((id) => (id === p.id ? null : p.id));
+                          setRenameValue(p.nickname);
+                          setEditSkillId(null);
+                        }}
+                      >
+                        改名
+                      </Button>
+                      <Button
+                        size="sm"
                         variant={editSkillId === p.id ? "default" : "ghost"}
-                        onClick={() =>
-                          setEditSkillId((id) => (id === p.id ? null : p.id))
-                        }
+                        onClick={() => {
+                          setEditSkillId((id) => (id === p.id ? null : p.id));
+                          setRenameId(null);
+                        }}
                       >
                         程度
                       </Button>

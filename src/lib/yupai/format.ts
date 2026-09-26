@@ -18,6 +18,11 @@ export function formatMinutes(totalSec: number): string {
   return `${Math.round(totalSec / 60)} 分`;
 }
 
+export function stintWaitSec(lastWaitStart: string | null, now: number): number {
+  if (!lastWaitStart) return 0;
+  return Math.max(0, (now - Date.parse(lastWaitStart)) / 1000);
+}
+
 export function currentWaitSec(
   lastWaitStart: string | null,
   waitTotalSec: number,

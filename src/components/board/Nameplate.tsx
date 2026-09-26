@@ -1,6 +1,6 @@
 import { Lock, UserRound } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { currentWaitSec, formatWait } from "@/lib/yupai/format";
+import { formatWait, stintWaitSec } from "@/lib/yupai/format";
 import { formatSkill, skillBand, STATUS_LABELS, type Player } from "@/lib/yupai/types";
 
 type Props = {
@@ -20,7 +20,7 @@ export function Nameplate({
 }: Props) {
   const waiting =
     player.status === "rest" || player.status === "force_rest"
-      ? currentWaitSec(player.lastWaitStart, player.waitTotalSec, now)
+      ? stintWaitSec(player.lastWaitStart, now)
       : 0;
   const meta: string[] = [];
   if (player.status === "rest" || player.status === "force_rest") {

@@ -183,6 +183,8 @@ export type BoardAction =
   | { type: "removeRestriction"; id: string }
   | { type: "checkInAll" }
   | { type: "fillNext" }
+  | { type: "stageQueue" }
+  | { type: "promoteQueue" }
   | { type: "reshuffleNext" }
   | {
       type: "endMatch";

@@ -1,10 +1,10 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import { useBoard } from "@/hooks/use-board";
 import { useNow } from "@/hooks/use-now";
-import { readSelfId, writeSelfId } from "@/lib/yupai/client-session";
-import { formatClock, elapsedMatchMs, formatWait, currentWaitSec } from "@/lib/yupai/format";
+import { clearSelfId, readSelfId, writeSelfId } from "@/lib/yupai/client-session";
+import { formatClock, elapsedMatchMs, formatWait, stintWaitSec } from "@/lib/yupai/format";
 import { formatSkill, formatSkillDelta, skillBand, STATUS_LABELS } from "@/lib/yupai/types";
 
 export function PlayerStatusPage({ code }: { code: string }) {
@@ -14,6 +14,7 @@ export function PlayerStatusPage({ code }: { code: string }) {
   const [picked, setPicked] = useState(stored);
   const board = api.board;
   const me = board?.players.find((p) => p.id === picked) ?? null;
+  const prevStatus = useRef(me?.status);
 
   const opponent = useMemo(() => {
     if (!board || !me) return null;
@@ -29,6 +30,25 @@ export function PlayerStatusPage({ code }: { code: string }) {
     }
     return null;
   }, [board, me]);
+
+  const queuedAhead = useMemo(() => {
+    if (!board) return 0;
+    const slots = new Set(
+      board.players.filter((p) => p.status === "queued" && p.courtNo != null).map((p) => p.courtNo),
+    );
+    return slots.size;
+  }, [board]);
+
+  useEffect(() => {
+    if (prevStatus.current && prevStatus.current !== "on_court" && me?.status === "on_court") {
+      try {
+        navigator.vibrate?.(200);
+      } catch {
+        /* ignore */
+      }
+    }
+    prevStatus.current = me?.status;
+  }, [me?.status]);
 
   if (api.isLoading) {
     return (
@@ -87,7 +107,28 @@ export function PlayerStatusPage({ code }: { code: string }) {
   const elapsed = live
     ? elapsedMatchMs(live.startedAt, live.pauseAccumulatedMs, live.pausedAt, now)
     : null;
-  const wait = currentWaitSec(me.lastWaitStart, me.waitTotalSec, now);
+  const wait = stintWaitSec(me.lastWaitStart, now);
+
+  let headline = `已等 ${formatWait(wait)}`;
+  if (elapsed != null) headline = formatClock(elapsed / 1000);
+  else if (me.status === "queued") headline = `上場順位 ${me.courtNo}`;
+  else if (me.status === "rest" || me.status === "force_rest") {
+    headline =
+      queuedAhead > 0
+        ? `前面還有 ${queuedAhead} 組 · 已等 ${formatWait(wait)}`
+        : `已等 ${formatWait(wait)}`;
+  }
+
+  let sub = opponent ? `對手 ${opponent.nickname}` : "尚無對手";
+  if (me.status === "queued") {
+    sub = opponent
+      ? `對手 ${opponent.nickname} · 空場會從順位 1 開始上，還不是場號`
+      : "等待對手 · 還不是場號";
+  } else if (me.status === "on_court" && me.courtNo) {
+    sub = opponent ? `第 ${me.courtNo} 場 · 對手 ${opponent.nickname}` : `第 ${me.courtNo} 場`;
+  } else if (me.status === "rest" || me.status === "force_rest") {
+    sub = queuedAhead > 0 ? "先等上場順位清空再輪到休息區" : "等團主按補順位";
+  }
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-md flex-col gap-6 px-5 py-10">
@@ -100,6 +141,7 @@ export function PlayerStatusPage({ code }: { code: string }) {
           variant="ghost"
           size="sm"
           onClick={() => {
+            clearSelfId(code);
             setPicked(null);
           }}
         >
@@ -109,18 +151,8 @@ export function PlayerStatusPage({ code }: { code: string }) {
 
       <section className="rounded-xl bg-court p-6 text-center">
         <p className="text-sm text-line">{STATUS_LABELS[me.status]}</p>
-        {elapsed != null ? (
-          <p className="mt-2 font-display text-6xl tabular leading-none">
-            {formatClock(elapsed / 1000)}
-          </p>
-        ) : me.status === "queued" ? (
-          <p className="mt-2 text-lg">上場順位 {me.courtNo}</p>
-        ) : (
-          <p className="mt-2 text-lg text-muted-foreground">已等 {formatWait(wait)}</p>
-        )}
-        <p className="mt-4 text-sm">
-          {opponent ? `對手 ${opponent.nickname}` : "尚無對手"}
-        </p>
+        <p className="mt-2 font-display text-4xl tabular leading-none">{headline}</p>
+        <p className="mt-4 text-sm">{sub}</p>
       </section>
 
       <dl className="grid grid-cols-2 gap-3">
@@ -135,11 +167,11 @@ export function PlayerStatusPage({ code }: { code: string }) {
           value={formatSkillDelta(me.skill - me.seedSkill)}
         />
         <Stat
-          label="場號"
+          label={me.status === "queued" ? "順位" : "場號"}
           value={
             me.status === "queued" && me.courtNo
               ? `順位 ${me.courtNo}`
-              : me.courtNo
+              : me.status === "on_court" && me.courtNo
                 ? `第 ${me.courtNo} 場`
                 : "—"
           }

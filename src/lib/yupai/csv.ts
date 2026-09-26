@@ -1,4 +1,4 @@
-import { clampSkill, SKILL_DEFAULT } from "./types.ts";
+import { migrateLegacySkill, SKILL_DEFAULT } from "./types.ts";
 
 export type CsvPlayerRow = {
   nickname: string;
@@ -47,7 +47,9 @@ export function parsePlayerCsv(text: string): CsvPlayerRow[] {
     const nickname = (cols[0] ?? "").trim();
     if (!nickname) continue;
     const skillRaw = Number(cols[1] ?? SKILL_DEFAULT);
-    const skill = Number.isFinite(skillRaw) ? clampSkill(skillRaw) : SKILL_DEFAULT;
+    const skill = Number.isFinite(skillRaw)
+      ? migrateLegacySkill(skillRaw)
+      : SKILL_DEFAULT;
     const flag = (cols[2] ?? "").trim();
     const isDropIn = flag === "1" || flag === "true" || flag === "是" || flag === "臨打";
     rows.push({ nickname, skill, isDropIn });

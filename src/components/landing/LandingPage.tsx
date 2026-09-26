@@ -204,7 +204,7 @@ export function LandingPage() {
           <div className="rounded-xl bg-card p-5">
             <h2 className="text-lg font-semibold">先看示範</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              4 面場、13 人單打。可直接拖名牌、排下一場；下場時填比分，程度會依分差微調。
+              4 面場、13 人單打。可直接拖名牌、先補順位再空場上場；下場時填比分，程度會依分差微調。
             </p>
             <Button
               className="mt-4"

@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { useBoard } from "@/hooks/use-board";
 import { useNow } from "@/hooks/use-now";
 import { downloadCsv, toCsv } from "@/lib/yupai/csv";
-import { currentWaitSec, formatMinutes, formatWait } from "@/lib/yupai/format";
+import { currentWaitSec, formatMinutes, formatWait, stintWaitSec } from "@/lib/yupai/format";
 import { formatSkill, formatSkillDelta, skillBand } from "@/lib/yupai/types";
 
 export function ReportPage({ code }: { code: string }) {
@@ -23,9 +23,9 @@ export function ReportPage({ code }: { code: string }) {
   const active = board.players.filter((p) => p.status !== "not_arrived");
   const plays = active.map((p) => p.playCount);
   const playGap = plays.length ? Math.max(...plays) - Math.min(...plays) : 0;
-  const waits = active.map((p) =>
-    currentWaitSec(p.lastWaitStart, p.waitTotalSec, now),
-  );
+  const waits = board.players
+    .filter((p) => p.status === "rest" || p.status === "force_rest")
+    .map((p) => stintWaitSec(p.lastWaitStart, now));
   const longestWait = waits.length ? Math.max(...waits) : 0;
   const movers = board.players
     .map((p) => ({ ...p, delta: p.skill - (p.seedSkill ?? p.skill) }))

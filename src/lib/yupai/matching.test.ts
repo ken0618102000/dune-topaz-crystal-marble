@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { pickPairs, pairKey, WEIGHT_PRESETS, type Candidate } from "./matching.ts";
 import { applyAction } from "./engine.ts";
+import { parsePlayerCsv } from "./csv.ts";
 import { WEIGHT_PRESETS as PRESETS } from "./matching.ts";
 import type { BoardState, Player, Session } from "./types.ts";
 
@@ -73,6 +74,7 @@ describe("pickPairs", () => {
     assert.equal(result.pairs.length, 4);
     const used = new Set(result.pairs.flatMap((p) => [p.a, p.b]));
     assert.equal(used.size, 8);
+    assert.equal(result.byeIds.length, 5);
     assert.equal(result.failReason, null);
   });
 
@@ -91,7 +93,7 @@ describe("pickPairs", () => {
       banRecent: false,
     });
     assert.equal(result.pairs.length, 6);
-    assert.ok(result.byeId);
+    assert.equal(result.byeIds.length, 1);
   });
 
   it("黑名單不可同場", () => {
@@ -656,7 +658,7 @@ describe("engine fillNext", () => {
     assert.deepEqual(on, ["x", "z"]);
   });
 
-  it("記分下場沒有下一場時，休息區自動補上場", () => {
+  it("記分下場沒有順位時，休息區補進順位不直接上場", () => {
     const a = restPlayer("a", 0);
     const b = restPlayer("b", 1);
     a.status = "on_court";
@@ -697,17 +699,17 @@ describe("engine fillNext", () => {
     );
     assert.ok(!("error" in out));
     if ("error" in out) return;
-    const on = out.state.players
-      .filter((p) => p.status === "on_court")
+    assert.equal(out.state.players.filter((p) => p.status === "on_court").length, 0);
+    const queued = out.state.players
+      .filter((p) => p.status === "queued")
       .map((p) => p.id)
       .sort();
-    assert.deepEqual(on, ["c", "d"]);
-    assert.equal(out.state.players.filter((p) => p.status === "queued").length, 0);
+    assert.deepEqual(queued, ["c", "d"]);
     assert.deepEqual(
       out.state.players.filter((p) => p.status === "rest").map((p) => p.id).sort(),
       ["a", "b"],
     );
-    assert.match(out.message ?? "", /上場 1 組/);
+    assert.match(out.message ?? "", /下一場排出 1 組/);
   });
 
   it("從下一場拖走一個人，搭檔留在下一場", () => {
@@ -948,6 +950,69 @@ describe("engine fillNext", () => {
     assert.ok((out.warning ?? "").includes("休息區沒人可排下一場"));
   });
 
+  it("拖去休息區會清連續場數", () => {
+    const a = restPlayer("a", 0);
+    a.status = "queued";
+    a.courtNo = 1;
+    a.consecutivePlayed = 2;
+    a.lastWaitStart = null;
+    const state: BoardState = {
+      session: emptySession({ courtCount: 1 }),
+      players: [a],
+      restrictions: [],
+      matches: [],
+    };
+    const out = applyAction(
+      state,
+      { type: "move", playerIds: ["a"], dest: { zone: "rest" } },
+      1_000_000_000_000,
+    );
+    assert.ok(!("error" in out));
+    if ("error" in out) return;
+    assert.equal(out.state.players[0]!.status, "rest");
+    assert.equal(out.state.players[0]!.consecutivePlayed, 0);
+  });
+
+  it("補順位不上場，空場上場才上", () => {
+    const state: BoardState = {
+      session: emptySession({ courtCount: 2 }),
+      players: [restPlayer("a", 0), restPlayer("b", 1), restPlayer("c", 2), restPlayer("d", 3)],
+      restrictions: [],
+      matches: [],
+    };
+    const staged = applyAction(state, { type: "stageQueue" }, 1_000_000_000_000 + 60_000);
+    assert.ok(!("error" in staged));
+    if ("error" in staged) return;
+    assert.equal(staged.state.players.filter((p) => p.status === "on_court").length, 0);
+    assert.equal(staged.state.players.filter((p) => p.status === "queued").length, 4);
+    const up = applyAction(staged.state, { type: "promoteQueue" }, 1_000_000_000_000 + 120_000);
+    assert.ok(!("error" in up));
+    if ("error" in up) return;
+    assert.equal(up.state.players.filter((p) => p.status === "on_court").length, 4);
+    assert.equal(up.state.players.filter((p) => p.status === "queued").length, 0);
+  });
+
+  it("沒排上的休息區都算輪空", () => {
+    const state: BoardState = {
+      session: emptySession({ courtCount: 1 }),
+      players: [
+        restPlayer("a", 0),
+        restPlayer("b", 1),
+        restPlayer("c", 2),
+        restPlayer("d", 3),
+        restPlayer("e", 4),
+      ],
+      restrictions: [],
+      matches: [],
+    };
+    const out = applyAction(state, { type: "stageQueue" }, 1_000_000_000_000 + 60_000);
+    assert.ok(!("error" in out));
+    if ("error" in out) return;
+    const byes = out.state.players.filter((p) => p.byeCount > 0).map((p) => p.id).sort();
+    assert.equal(out.state.players.filter((p) => p.status === "queued").length, 2);
+    assert.equal(byes.length, 3);
+  });
+
   it("公平權重下上場次數差會收斂", () => {
     const n = 13;
     const stats = Array.from({ length: n }, (_, i) => ({
@@ -998,10 +1063,21 @@ describe("engine fillNext", () => {
           byes.add(s.id);
         }
       }
-      if (result.byeId) byes.add(result.byeId);
+      if (result.byeIds.length) {
+        for (const id of result.byeIds) byes.add(id);
+      }
     }
     const plays = stats.map((s) => s.playCount);
     assert.ok(Math.max(...plays) - Math.min(...plays) <= 1);
     assert.ok(byes.size >= 8);
+  });
+});
+
+describe("csv", () => {
+  it("舊 1–5 程度會對到 1–18", () => {
+    const rows = parsePlayerCsv("暱稱,程度,臨打\n阿凱,4,\n小美,3,1");
+    assert.equal(rows[0]!.skill, 14);
+    assert.equal(rows[1]!.skill, 10);
+    assert.equal(rows[1]!.isDropIn, true);
   });
 });

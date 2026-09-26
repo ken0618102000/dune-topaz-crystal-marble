@@ -159,6 +159,7 @@ function startMatch(
   b.courtNo = courtNo;
   a.locked = false;
   b.locked = false;
+  consumePreferredPair(state, aId, bId);
   state.matches.push({
     id: newId(),
     courtNo,
@@ -195,7 +196,17 @@ function assignQueue(
 function sendToRest(p: Player, now: number) {
   p.status = "rest";
   p.courtNo = null;
+  p.consecutivePlayed = 0;
   startWait(p, now);
+}
+
+function consumePreferredPair(state: BoardState, aId: string, bId: string) {
+  const k = pairKey(aId, bId);
+  for (const r of state.restrictions) {
+    if (r.kind === "preferred" && !r.used && pairKey(r.playerAId, r.playerBId) === k) {
+      r.used = true;
+    }
+  }
 }
 
 function markUsedPreferred(state: BoardState, ids: string[]) {
@@ -214,10 +225,11 @@ function convertForceRest(state: BoardState, now: number) {
   }
 }
 
-function applyBye(state: BoardState, byeId: string | null) {
-  if (!byeId) return;
-  const p = state.players.find((x) => x.id === byeId);
-  if (p) p.byeCount += 1;
+function applyByes(state: BoardState, ids: string[]) {
+  for (const id of ids) {
+    const p = state.players.find((x) => x.id === id);
+    if (p) p.byeCount += 1;
+  }
 }
 
 function emptyCourts(state: BoardState, onlyCourtNo?: number): number[] {
@@ -357,7 +369,7 @@ function pairRestInto(
     }
   }
   markUsedPreferred(state, result.usedPreferredIds);
-  applyBye(state, result.byeId);
+  applyByes(state, result.byeIds);
   return { count: result.pairs.length, warning: restrictionWarn(result.warning) };
 }
 
@@ -383,13 +395,13 @@ function explainFillFail(state: BoardState, fallback: string): string {
     return `休息區可排 ${restReady.length} 人。還有 ${notArrived.length} 人未簽到，請在名單按「全部簽到」。`;
   }
   if (restReady.length < 2 && force.length > 0) {
-    return "剛下場的人還在強制休息。再按一次「排下一場」就會輪到他們。";
+    return "剛下場的人還在強制休息。再按一次「補順位」就會輪到他們。";
   }
   if (restReady.length < 2 && locked.length > 0) {
     return `休息區可排 ${restReady.length} 人（有人鎖定不排）。至少要 2 人才排得了單打。`;
   }
   if (restReady.length < 2 && queued.length >= 2 && hasHungryCourt(state)) {
-    return "空場會依上場順位補人。再按一次「排下一場」就會從順位 1 開始上場。";
+    return "空場會依上場順位補人。按「空場上場」就會從順位 1 開始上。";
   }
   if (restReady.length < 2 && onCourt.length >= 2) {
     return `休息區沒人可排下一場。人還在場上打，下場後再排。`;
@@ -458,40 +470,32 @@ function refillAfterMatch(
   courtNo: number,
   now: number,
 ): { up: number; queued: number; people: number; warning?: string } {
-  let people = completeAllPartialQueues(state, now);
+  const people = completeAllPartialQueues(state, now);
   const promoWarn = promoteCourt(state, courtNo, now);
-  let up = liveOnCourt(state, courtNo) === 2 ? 1 : 0;
-  let fail: string | undefined;
-
-  if (liveOnCourt(state, courtNo) === 0) {
-    const staged = pairRestInto(state, now, true, false);
-    people += completeAllPartialQueues(state, now);
-    promoteCourt(state, courtNo, now);
-    if (liveOnCourt(state, courtNo) === 2) up = 1;
-    else fail = staged.fail;
-  }
-
+  const up = liveOnCourt(state, courtNo) === 2 ? 1 : 0;
   const next = pairRestInto(state, now, true, false);
 
   let warning: string | undefined;
   if (promoWarn) warning = promoWarn;
-  else if (up === 0 && fail && fail !== "人數不足") warning = fail;
-  else if (up === 0 && candidates(state, now).length >= 2) {
-    warning = explainFillFail(state, fail ?? "休息區沒人可補上場");
+  else if (up === 0 && next.fail && next.fail !== "人數不足") warning = next.fail;
+  else if (up === 0 && liveOnCourt(state, courtNo) === 0 && next.count > 0) {
+    warning = "休息區已補進上場順位。空場請按「空場上場」。";
+  } else if (up === 0 && candidates(state, now).length >= 2) {
+    warning = explainFillFail(state, next.fail ?? "休息區沒人可補上場");
   }
   convertForceRest(state, now);
   return { up, queued: next.count, people, warning };
 }
 
 function fillNext(state: BoardState, now: number): { warning?: string; message?: string } {
-  // 休息區只進上場順位。已在順位裡的成組才補空場，且從順位 1 開始。
+  // 已在順位的成組先上空場，休息區只補進順位。
   const people = completeAllPartialQueues(state, now);
   const promoted = promoteQueuedToEmptyCourts(state, now);
   const seat = fillOneSeatCourts(state, now);
 
   if (promoted + seat.count + people === 0 && !queueHasVacancy(state)) {
     convertForceRest(state, now);
-    return { message: "下一場都排滿了", warning: seat.warning };
+    return { message: "上場順位都排滿了", warning: seat.warning };
   }
 
   let queued = pairRestInto(state, now, true, false);
@@ -514,6 +518,51 @@ function fillNext(state: BoardState, now: number): { warning?: string; message?:
   return {
     message: fillMessage(up, queued.count, people),
     warning: queued.warning ?? seat.warning,
+  };
+}
+
+function stageQueue(state: BoardState, now: number): { warning?: string; message?: string } {
+  const people = completeAllPartialQueues(state, now);
+  let queued = pairRestInto(state, now, true, false);
+
+  if (queued.count === 0 && Math.floor(candidates(state, now).length / 2) === 0) {
+    const forceN = state.players.filter((p) => p.status === "force_rest").length;
+    if (forceN > 0) {
+      convertForceRest(state, now);
+      queued = pairRestInto(state, now, true, false);
+    }
+  }
+
+  if (people + queued.count === 0) {
+    if (!queueHasVacancy(state)) {
+      convertForceRest(state, now);
+      return { message: "上場順位都排滿了" };
+    }
+    const why = explainFillFail(state, queued.fail ?? "休息區可排的人不足，單打至少要 2 人。");
+    convertForceRest(state, now);
+    return { warning: why };
+  }
+  convertForceRest(state, now);
+  return {
+    message: fillMessage(0, queued.count, people),
+    warning: queued.warning,
+  };
+}
+
+function promoteQueue(state: BoardState, now: number): { warning?: string; message?: string } {
+  const promoted = promoteQueuedToEmptyCourts(state, now);
+  const seat = fillOneSeatCourts(state, now);
+  const up = promoted + seat.count;
+  if (up === 0) {
+    const empty = emptyCourts(state);
+    const ready = firstCompleteQueueSlot(state);
+    if (empty.length === 0) return { message: "沒有空場可上" };
+    if (!ready) return { warning: "順位還沒成組。先按「補順位」，或把人拖進順位。" };
+    return { warning: seat.warning ?? "空場沒有可上的組合" };
+  }
+  return {
+    message: fillMessage(up, 0, 0),
+    warning: seat.warning,
   };
 }
 
@@ -793,7 +842,11 @@ function setStatus(state: BoardState, playerId: string, status: PlayerStatus, no
     p.courtNo = null;
     p.locked = false;
     p.lastWaitStart = null;
-  } else if (status === "rest" || status === "force_rest") {
+  } else if (status === "rest") {
+    p.courtNo = null;
+    p.consecutivePlayed = 0;
+    startWait(p, now);
+  } else if (status === "force_rest") {
     p.courtNo = null;
     startWait(p, now);
   }
@@ -897,12 +950,24 @@ export function applyAction(
         const out = fillNext(next, now);
         return { state: next, ...out };
       }
+      case "stageQueue": {
+        const out = stageQueue(next, now);
+        return { state: next, ...out };
+      }
+      case "promoteQueue": {
+        const out = promoteQueue(next, now);
+        return { state: next, ...out };
+      }
       case "reshuffleNext": {
         for (const p of next.players) {
           if (p.status === "queued") sendToRest(p, now);
         }
-        const out = fillNext(next, now);
-        return { state: next, message: out.message ?? "已重排下一場", warning: out.warning };
+        const out = stageQueue(next, now);
+        return {
+          state: next,
+          message: out.message ? `已重排上場順位（場上不動）· ${out.message}` : "已重排上場順位，場上不動",
+          warning: out.warning,
+        };
       }
       case "endMatch": {
         const out = finishMatch(
@@ -964,6 +1029,7 @@ export function applyAction(
             sendToRest(p, now);
           }
         }
+        compactQueue(next);
         return { state: next, message: "已更新場次設定" };
       }
       case "endSession": {

@@ -25,7 +25,7 @@ export type PairingInput = {
 
 export type PairingResult = {
   pairs: Array<{ a: string; b: string; via: "preferred" | "auto" }>;
-  byeId: string | null;
+  byeIds: string[];
   usedPreferredIds: string[];
   failReason: string | null;
   warning: string | null;
@@ -153,7 +153,7 @@ export function pickPairs(input: PairingInput): PairingResult {
     take(opp.id);
   }
 
-  const byeId = pool.length === 1 ? pool[0]!.id : null;
+  const byeIds = pool.map((p) => p.id);
 
   let failReason: string | null = null;
   let warning: string | null = null;
@@ -167,7 +167,7 @@ export function pickPairs(input: PairingInput): PairingResult {
         : "部分組合被硬限制擋下";
   }
 
-  return { pairs, byeId, usedPreferredIds, failReason, warning };
+  return { pairs, byeIds, usedPreferredIds, failReason, warning };
 }
 
 /** Pick a single opponent for a fixed core (e.g. 場上已有 1 人). */

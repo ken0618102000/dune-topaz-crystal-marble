@@ -11,7 +11,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { WEIGHT_PRESETS } from "@/lib/yupai/matching";
-import { MATCH_DURATIONS, type Session, type Weights, type WeightPreset } from "@/lib/yupai/types";
+import { MATCH_DURATIONS, type Session, type Weights, type WeightPreset, type Player, type Restriction } from "@/lib/yupai/types";
 import type { BoardApi } from "@/hooks/use-board";
 import { readHostToken } from "@/lib/yupai/client-session";
 import { CountPicker, TimeSelect } from "@/components/ui/count-picker";
@@ -21,9 +21,11 @@ type Props = {
   onOpenChange: (open: boolean) => void;
   api: BoardApi;
   session: Session;
+  players: Player[];
+  restrictions: Restriction[];
 };
 
-export function SettingsSheet({ open, onOpenChange, api, session }: Props) {
+export function SettingsSheet({ open, onOpenChange, api, session, players, restrictions }: Props) {
   const [venueName, setVenueName] = useState(session.venueName);
   const [startTime, setStartTime] = useState(session.startTime);
   const [endTime, setEndTime] = useState(session.endTime);
@@ -172,6 +174,39 @@ export function SettingsSheet({ open, onOpenChange, api, session }: Props) {
                   </Field>
                 ))}
               </div>
+              <div>
+                <Label>指定對戰 / 不要同場</Label>
+                <ul className="mt-2 flex flex-col gap-2">
+                  {restrictions.length === 0 ? (
+                    <li className="text-sm text-muted-foreground">
+                      長按名牌可新增。這裡可以刪除。
+                    </li>
+                  ) : (
+                    restrictions.map((r) => {
+                      const a = players.find((p) => p.id === r.playerAId)?.nickname ?? "—";
+                      const b = players.find((p) => p.id === r.playerBId)?.nickname ?? "—";
+                      return (
+                        <li
+                          key={r.id}
+                          className="flex items-center justify-between gap-2 rounded-lg bg-secondary px-3 py-2 text-sm"
+                        >
+                          <span>
+                            {r.kind === "preferred" ? "指定" : "不要同場"} · {a} / {b}
+                            {r.kind === "preferred" && r.used ? "（已用）" : ""}
+                          </span>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => api.run({ type: "removeRestriction", id: r.id })}
+                          >
+                            刪
+                          </Button>
+                        </li>
+                      );
+                    })
+                  )}
+                </ul>
+              </div>
               <Button
                 onClick={() =>
                   api.run({
@@ -256,7 +291,8 @@ export function SettingsSheet({ open, onOpenChange, api, session }: Props) {
               className="mt-3 flex flex-col gap-2"
               onSubmit={(e) => {
                 e.preventDefault();
-                if (pin || true) api.acceptTransfer.mutate(pinInputValue(e));
+                const value = pinInputValue(e);
+                if (value.trim()) api.acceptTransfer.mutate(value.trim());
               }}
             >
               <Label htmlFor="xfer">移交碼</Label>

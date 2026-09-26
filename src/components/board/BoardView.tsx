@@ -9,6 +9,7 @@ import {
   Settings,
   BarChart3,
   Smartphone,
+  ArrowUpToLine,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -83,6 +84,7 @@ export function BoardView({ code }: { code: string }) {
   const [pickMode, setPickMode] = useState<null | "preferred" | "blacklist">(null);
   const [scoreCourt, setScoreCourt] = useState<number | null>(null);
   const [drag, setDrag] = useState<Drag | null>(null);
+  const [hoverDrop, setHoverDrop] = useState<string | null>(null);
   const longPress = useRef<number | null>(null);
   const dragging = useRef(false);
   const startPt = useRef({ x: 0, y: 0, ids: [] as string[] });
@@ -138,6 +140,9 @@ export function BoardView({ code }: { code: string }) {
       }
       if (dragging.current) {
         setDrag({ ids, label, x: ev.clientX, y: ev.clientY });
+        const el = document.elementFromPoint(ev.clientX, ev.clientY);
+        const node = el?.closest("[data-drop]") as HTMLElement | null;
+        setHoverDrop(node?.dataset.drop ?? null);
       }
     };
     const up = (ev: PointerEvent) => {
@@ -147,6 +152,7 @@ export function BoardView({ code }: { code: string }) {
       const wasDrag = dragging.current;
       dragging.current = false;
       setDrag(null);
+      setHoverDrop(null);
       if (!wasDrag) return;
       const dest = dropFromPoint(ev.clientX, ev.clientY);
       if (!dest) return;
@@ -199,12 +205,12 @@ export function BoardView({ code }: { code: string }) {
   };
 
   const copyCode = async () => {
-    const url = `${window.location.origin}/s/${session.code}`;
+    const url = `${window.location.origin}/s/${session.code}/me`;
     try {
       await navigator.clipboard.writeText(url);
-      toast.success("已複製場次連結");
+      toast.success("已複製球友狀態連結");
     } catch {
-      toast.message(session.code);
+      toast.message(`${session.code} · /me`);
     }
   };
 
@@ -238,10 +244,18 @@ export function BoardView({ code }: { code: string }) {
           <Button
             size="sm"
             disabled={!api.canEdit}
-            onClick={() => api.run({ type: "fillNext" })}
+            onClick={() => api.run({ type: "stageQueue" })}
           >
             <Sparkles className="size-3.5" />
-            排下一場
+            補順位
+          </Button>
+          <Button
+            size="sm"
+            disabled={!api.canEdit}
+            onClick={() => api.run({ type: "promoteQueue" })}
+          >
+            <ArrowUpToLine className="size-3.5" />
+            空場上場
           </Button>
           <Button
             size="sm"
@@ -250,7 +264,7 @@ export function BoardView({ code }: { code: string }) {
             onClick={() => api.run({ type: "reshuffleNext" })}
           >
             <Shuffle className="size-3.5" />
-            全部重排
+            重排順位
           </Button>
           <Button
             size="sm"
@@ -322,9 +336,16 @@ export function BoardView({ code }: { code: string }) {
                     canEdit={api.canEdit}
                     scoringEnabled={session.scoringEnabled}
                     idleLabel={idleLabel}
+                    dropActive={
+                      hoverDrop === `court:${no}` ||
+                      Boolean(hoverDrop?.startsWith(`seat:court:${no}:`))
+                    }
                     onEnd={() => requestEnd(no)}
                     onPause={() => api.run({ type: "pauseMatch", courtNo: no })}
                     onResume={() => api.run({ type: "resumeMatch", courtNo: no })}
+                    onExtend={() =>
+                      api.run({ type: "extendMatch", courtNo: no, extraSec: 300 })
+                    }
                     onPointerPlayer={(p, e) => beginPointer([p.id], p.nickname, e)}
                   />
                 </div>
@@ -334,21 +355,29 @@ export function BoardView({ code }: { code: string }) {
         </section>
 
         <section>
-          <h2 className="mb-2 text-xs font-medium tracking-wide text-muted-foreground">
+          <h2 className="mb-1 text-xs font-medium tracking-wide text-muted-foreground">
             上場順位
           </h2>
-          <div className="flex snap-x gap-3 overflow-x-auto pb-2 lg:grid lg:grid-cols-4 lg:overflow-visible">
+          <p className="mb-2 text-xs text-muted-foreground">
+            不綁場地。空場上場從順位 1 開始補目前空著的場。
+          </p>
+          <div className="flex snap-x flex-col gap-2 overflow-x-auto pb-2 lg:flex-row lg:flex-wrap">
             {courts.map((no) => {
               const queued = board.players.filter(
                 (p) => p.status === "queued" && p.courtNo === no,
               );
               return (
-                <div key={no} className="w-64 shrink-0 snap-start lg:w-auto">
+                <div key={no} className="w-full shrink-0 snap-start lg:w-[min(100%,22rem)]">
                   <NextSlot
                     courtNo={no}
                     players={queued}
                     now={now}
                     nameOf={nameOf}
+                    highlight={no === 1}
+                    dropActive={
+                      hoverDrop === `queue:${no}` ||
+                      Boolean(hoverDrop?.startsWith(`seat:queue:${no}:`))
+                    }
                     onPointerPlayer={(p, e) => beginPointer([p.id], p.nickname, e)}
                   />
                 </div>
@@ -359,7 +388,9 @@ export function BoardView({ code }: { code: string }) {
 
         <section
           data-drop="rest"
-          className="min-h-36 rounded-xl border border-dashed border-border bg-card/60 p-3"
+          className={`min-h-36 rounded-xl border border-dashed bg-card/60 p-3 ${
+            hoverDrop === "rest" ? "border-primary ring-2 ring-primary" : "border-border"
+          }`}
         >
           <h2 className="mb-2 text-xs font-medium tracking-wide text-muted-foreground">
             休息區
@@ -419,6 +450,8 @@ export function BoardView({ code }: { code: string }) {
         onOpenChange={setSettingsOpen}
         api={api}
         session={session}
+        players={board.players}
+        restrictions={board.restrictions}
       />
 
       <Sheet open={Boolean(menuPlayer)} onOpenChange={() => { setMenuPlayer(null); setPickMode(null); }}>
