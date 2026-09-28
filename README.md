@@ -90,13 +90,13 @@
 
 1. 下載倉庫 ZIP：[ken0618102000/dune-topaz-crystal-marble](https://github.com/ken0618102000/dune-topaz-crystal-marble) → Code → Download ZIP，解壓縮。
 2. 雙擊 **`一鍵啟動.bat`**。沒裝 Node 會自動裝，瀏覽器會自己打開看板。
-3. 手機 / 平板連同一 Wi-Fi，用視窗裡印的區網網址進入。場次存在 `data\`，關掉再開還在。
+3. 手機 / 平板連同一 Wi-Fi，用視窗裡印的區網網址進入。場次存在 `%LOCALAPPDATA%\yupai\data`（通常是 `C:\Users\你的名字\AppData\Local\yupai\data`）。重新下載 ZIP 不會蓋掉名單。每次啟動會在 `backups` 留最近 7 份壓縮備份。
 
 詳細（防火牆、代裝失敗）見 [docs/SETUP.md](docs/SETUP.md#windows-一鍵啟動)。
 
 ### 本機開發
 
-不必設定資料庫。沒有 `DATABASE_URL` 時用內嵌 PGLite。開發模式重啟後記憶體資料會清空；Windows 一鍵啟動會把資料寫進 `data\`。
+不必設定資料庫。沒有 `DATABASE_URL` 時用內嵌 PGLite。開發模式重啟後記憶體資料會清空。Windows 一鍵啟動會把資料寫進 `%LOCALAPPDATA%\yupai\data`。套件沒變就不會再跑安裝，所以沒網路也能開已裝過的看板。
 
 ```bash
 git clone https://github.com/ken0618102000/dune-topaz-crystal-marble.git
